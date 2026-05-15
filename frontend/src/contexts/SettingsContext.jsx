@@ -56,15 +56,20 @@ export function SettingsProvider({ children }) {
     const next = { ...settings, ...updates }
     setSettings(next)
     try {
+      const token = localStorage.getItem('token')
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers.Authorization = `Bearer ${token}`
+
       const resp = await fetch('/api/settings/', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(updates),
       })
       if (!resp.ok) throw new Error('Save failed')
       const saved = await resp.json()
       setSettings(prev => ({ ...prev, ...saved }))
     } catch (err) {
+      setSettings(settings)
       console.error('Failed to save settings:', err)
       throw err
     }
