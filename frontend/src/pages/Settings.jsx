@@ -778,7 +778,7 @@ export default function Settings() {
               <SettingsRow label={t('settings.app')} description="Pokemon TCG Collection">
                 <span className="text-xs font-bold text-text-muted px-2 py-1 rounded-lg"
                   style={{ background: 'rgba(255,255,255,0.05)' }}>
-                  v1.9
+                  v{__APP_VERSION__}
                 </span>
               </SettingsRow>
               <SettingsRow label={t('settings.dataSource')} description={t('settings.dataSourceDesc')}>
