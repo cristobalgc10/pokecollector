@@ -1,6 +1,7 @@
 import logging
 import datetime
 import math
+from typing import Any, Mapping
 from sqlalchemy.orm import Session, load_only
 from sqlalchemy import func
 from models import Card, Set, CollectionItem, WishlistItem, PriceHistory, SyncLog, PortfolioSnapshot, CustomCardMatch, Setting, ProductPurchase, User
@@ -17,9 +18,11 @@ MISSING_PRICE_SYNC_RATIO = 0.7
 NO_PRICE_RETRY_COOLDOWN = datetime.timedelta(hours=24)
 PRICE_SYNC_DB_CHUNK_SIZE = 400  # Stay below SQLite's common 999-parameter limit.
 
-def _has_any_price(card) -> bool:
+def _has_any_price(card: Card | Mapping[str, Any]) -> bool:
+    if isinstance(card, Mapping):
+        return any(card.get(field) is not None for field in PRICE_FIELDS)
     return any(
-        (card.get(field) if isinstance(card, dict) else getattr(card, field, None)) is not None
+        getattr(card, field, None) is not None
         for field in PRICE_FIELDS
     )
 
@@ -62,8 +65,7 @@ def _price_sync_limit(db: Session) -> int:
     return min(MAX_CARDS_PER_SYNC, max(MIN_CARDS_PER_SYNC, scaled_limit))
 
 
-def _empty_price_sync_plan(db: Session) -> dict:
-    sync_limit = _price_sync_limit(db)
+def _empty_price_sync_plan(sync_limit: int) -> dict:
     return {
         "ids": [],
         "sync_limit": sync_limit,
@@ -111,7 +113,7 @@ def _price_sync_plan(db: Session, *, now: datetime.datetime | None = None) -> di
             latest_activity[card_id] = normalized_seen_at
 
     if not latest_activity:
-        return _empty_price_sync_plan(db)
+        return _empty_price_sync_plan(_price_sync_limit(db))
 
     syncable_cards = []
     price_columns = [getattr(Card, field) for field in PRICE_FIELDS]

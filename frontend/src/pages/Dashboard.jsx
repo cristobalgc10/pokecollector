@@ -97,7 +97,10 @@ export default function Dashboard() {
   const uniqueCards = data?.unique_cards || 0
   const ownedSets = data?.owned_sets || 0
   const totalSets = data?.total_sets || 0
-  const trainerName = user?.username || settings?.trainer_name || 'Trainer'
+  const configuredTrainerName = settings?.trainer_name?.trim()
+  const trainerName = configuredTrainerName && configuredTrainerName.toUpperCase() !== 'TRAINER'
+    ? configuredTrainerName
+    : user?.username || configuredTrainerName || 'Trainer'
 
   return (
     <div className="space-y-5 pb-2">
