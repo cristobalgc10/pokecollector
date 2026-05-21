@@ -1,7 +1,9 @@
+import re
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
-from typing import List, Optional
 from api.auth import get_current_user
 from database import get_db
 from models import Set, Card, CollectionItem, Setting, User
@@ -10,6 +12,28 @@ from services import pokemon_api
 from services.card_fallbacks import apply_cross_language_fallbacks
 
 router = APIRouter()
+
+_NATURAL_SORT_RE = re.compile(r"(\d+|\D+)")
+
+
+def _natural_card_number_key(number: Optional[str]) -> tuple:
+    """Sort card numbers naturally while preserving alphanumeric formats.
+
+    Examples:
+    - 1, 2, 10 instead of 1, 10, 2
+    - 001, 002, 010 still sort correctly
+    - 74, 74a, 74b and H04 are handled without converting the display value
+    """
+    if number is None:
+        return ((2, ""),)
+
+    parts = []
+    for part in _NATURAL_SORT_RE.findall(str(number).strip()):
+        if part.isdigit():
+            parts.append((0, int(part), len(part), part))
+        else:
+            parts.append((1, part.casefold()))
+    return tuple(parts) or ((2, ""),)
 
 
 def _get_language(db: Session) -> str:
@@ -170,14 +194,14 @@ def get_set_checklist(
     cards = db.query(Card).filter(
         Card.set_id == tcg_id,
         Card.lang == set_lang,
-    ).order_by(Card.number.asc()).all()
+    ).all()
 
     # If no lang-filtered cards found, check if there are cards with NULL/wrong lang
     # (pre-migration cards) and fix them
     if not cards:
         existing_cards = db.query(Card).filter(
             Card.set_id == tcg_id,
-        ).order_by(Card.number.asc()).all()
+        ).all()
         if existing_cards:
             # Update their lang to match this set
             for c in existing_cards:
@@ -203,12 +227,14 @@ def get_set_checklist(
             cards = db.query(Card).filter(
                 Card.set_id == tcg_id,
                 Card.lang == set_lang,
-            ).order_by(Card.number.asc()).all()
+            ).all()
         except Exception:
             # Last resort: return any cards for this set regardless of lang
             cards = db.query(Card).filter(
                 Card.set_id == tcg_id,
-            ).order_by(Card.number.asc()).all()
+            ).all()
+
+    cards.sort(key=lambda card: _natural_card_number_key(card.number))
 
     # Get owned card IDs
     owned_card_ids = {
