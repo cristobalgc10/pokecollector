@@ -1,7 +1,7 @@
 import { useState, useMemo, useId, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Check, X, Filter, SortAsc, Download, Upload, ChevronUp, ChevronDown, Search, PenLine, Grid2X2, List, Library, BookOpen, Heart } from 'lucide-react'
-import { getCollection, updateCollectionItem, updateCardCustomImage, removeFromCollection, importCollectionCsv, exportCSV, exportPDF, getSets } from '../api/client'
+import { Trash2, Check, X, Filter, SortAsc, Download, Upload, ChevronUp, ChevronDown, Search, PenLine, Grid2X2, List, Library, BookOpen, Heart, Copy } from 'lucide-react'
+import { getCollection, updateCollectionItem, updateCardCustomImage, removeFromCollection, importCollectionCsv, exportCSV, exportPDF, getSets, addToCollection, getBinders, addCollectionItemToBinder } from '../api/client'
 import { CustomCardModal } from '../components/CardItem'
 import { useSettings } from '../contexts/SettingsContext'
 import CardImage from '../components/CardImage'
@@ -57,6 +57,14 @@ const HOLO_FIELD_MAP = {
 
 const CSV_IMPORT_HEADER = 'set_code,number,quantity,condition,variant,lang,purchase_price'
 const CSV_IMPORT_TEMPLATE = `${CSV_IMPORT_HEADER}\nASC,152,1,NM,,en,\n`
+
+const naturalCardNumberKey = (number) => String(number || '').trim().split(/(\d+)/).map(part => /^\d+$/.test(part) ? part.padStart(8, '0') : part.toLowerCase()).join('')
+
+const collectionCardIdKey = (item) => {
+  const card = item.card || {}
+  const setKey = (card.set_ref?.abbreviation || card.set_id || '').toLowerCase()
+  return `${setKey}|${naturalCardNumberKey(card.number)}|${card.name || ''}`
+}
 
 const downloadCsvImportTemplate = () => {
   const blob = new Blob([CSV_IMPORT_TEMPLATE], { type: 'text/csv;charset=utf-8' })
@@ -255,6 +263,12 @@ function CollectionEditModal({ item, onClose }) {
   const [customImageVersion, setCustomImageVersion] = useState(0)
   const customImageInputId = useId()
 
+  const { data: binders = [] } = useQuery({
+    queryKey: ['binders'],
+    queryFn: () => getBinders().then(r => r.data),
+  })
+  const collectionBinders = binders.filter(binder => (binder.binder_type || 'collection') === 'collection')
+
   const hasApiImage = Boolean(card?.images?.large || card?.images_large || card?.images?.small || card?.images_small || card?.image)
   const canEditCustomImage = card && !card.is_custom && !hasApiImage && typeof item.card_id === 'string'
   const customImageProxyUrl = canEditCustomImage && savedCustomImageUrl
@@ -288,6 +302,33 @@ function CollectionEditModal({ item, onClose }) {
       onClose()
     },
     onError: () => toast.error(t('collection.removeFailed')),
+  })
+
+  const cloneMutation = useMutation({
+    mutationFn: () => addToCollection({
+      card_id: item.card_id,
+      quantity: 1,
+      condition,
+      variant: variant || null,
+      lang,
+      purchase_price: price ? parseFloat(price) : undefined,
+    }),
+    onSuccess: () => {
+      toast.success(t('collection.cloned'))
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      onClose()
+    },
+    onError: () => toast.error(t('card.addFailed')),
+  })
+
+  const addToBinderMutation = useMutation({
+    mutationFn: (binderId) => addCollectionItemToBinder(binderId, item.id),
+    onSuccess: () => {
+      toast.success(t('collection.addedToBinder'))
+      queryClient.invalidateQueries({ queryKey: ['binders'] })
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || t('card.addFailed')),
   })
 
   const customImageMutation = useMutation({
@@ -469,6 +510,28 @@ function CollectionEditModal({ item, onClose }) {
                 </div>
               </div>
             )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => cloneMutation.mutate()}
+                disabled={cloneMutation.isPending}
+                className="btn-ghost justify-center border-brand-red/30 text-brand-red hover:bg-brand-red/10"
+              >
+                <Copy size={14} /> {cloneMutation.isPending ? t('card.adding') : t('collection.addAnotherVersion')}
+              </button>
+              <select
+                className="select text-sm"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) addToBinderMutation.mutate(parseInt(e.target.value, 10))
+                }}
+                disabled={addToBinderMutation.isPending || collectionBinders.length === 0}
+              >
+                <option value="">{collectionBinders.length === 0 ? t('collection.noCollectionBinders') : t('collection.addToBinder')}</option>
+                {collectionBinders.map(binder => <option key={binder.id} value={binder.id}>{binder.name}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Actions */}
@@ -647,6 +710,7 @@ export default function Collection() {
         case 'market_price': valA = getEffectivePrice(a.card, a.variant); valB = getEffectivePrice(b.card, b.variant); break
         case 'price_trend': valA = getEffectivePrice(a.card, a.variant, 'price_trend'); valB = getEffectivePrice(b.card, b.variant, 'price_trend'); break
         case 'set': valA = a.card?.set_ref?.name || ''; valB = b.card?.set_ref?.name || ''; break
+        case 'card_id': valA = collectionCardIdKey(a); valB = collectionCardIdKey(b); break
         case 'name': valA = a.card?.name?.toLowerCase() || ''; valB = b.card?.name?.toLowerCase() || ''; break
         default: return 0
       }
@@ -747,6 +811,7 @@ export default function Collection() {
               <option value="market_price">{t('collection.sortMarketPrice')}</option>
               <option value="price_trend">{t('collection.sortTrend')}</option>
               <option value="set">{t('collection.sortSet')}</option>
+              <option value="card_id">{t('collection.sortCardId')}</option>
             </select>
             <button onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')} className="btn-ghost py-1.5 px-2">
               {sortOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}

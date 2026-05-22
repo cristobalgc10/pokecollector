@@ -196,6 +196,7 @@ const de = {
     bulkAddFailed: 'Bulk-Hinzufügen fehlgeschlagen',
     bulkAddLoading: 'Lade passende Karten...',
     bulkAddFailedCount: 'fehlgeschlagen',
+    alreadyOwned: 'Bereits in Sammlung',
   },
 
   // Collection
@@ -243,6 +244,7 @@ const de = {
     sortMarketPrice: 'Marktpreis',
     sortTrend: 'Preistrend',
     sortSet: 'Set',
+    sortCardId: 'Karten-ID',
     desc: 'Abst.',
     asc: 'Aufst.',
     card: 'Karte',
@@ -256,6 +258,12 @@ const de = {
     removeFailed: 'Entfernen fehlgeschlagen',
     updated: 'Aktualisiert!',
     removed: 'Aus Sammlung entfernt',
+    remove: 'Aus Sammlung entfernen',
+    cloned: 'Weitere Kopie hinzugefügt',
+    addAnotherVersion: 'Weitere Version hinzufügen',
+    addToBinder: 'Zu Binder hinzufügen...',
+    addedToBinder: 'Zum Binder hinzugefügt',
+    noCollectionBinders: 'Noch keine Sammlungs-Binder',
     filterSet: 'Set',
     filterType: 'Typ',
     filterMinPrice: 'Min €',
@@ -340,6 +348,9 @@ const de = {
     binderName: 'Bindername...',
     description: 'Beschreibung (optional)',
     color: 'Farbe',
+    icon: 'Icon',
+    chooseIcon: 'Pokémon-Icon wählen',
+    clearIcon: 'Icon entfernen',
     card: 'Karte',
     cards: 'Karten',
     created: 'Binder erstellt!',
@@ -699,6 +710,8 @@ const de = {
     cards: 'Karten',
     loadFailed: 'Set konnte nicht geladen werden.',
     goBack: 'Zurück',
+    addVersion: 'Version hinzufügen',
+    ownedVersions: 'Besessene Versionen',
   },
 
   // Card modal

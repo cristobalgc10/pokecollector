@@ -196,6 +196,7 @@ const en = {
     bulkAddFailed: 'Bulk add failed',
     bulkAddLoading: 'Loading matching cards...',
     bulkAddFailedCount: 'failed',
+    alreadyOwned: 'Already in collection',
   },
 
   // Collection
@@ -243,6 +244,7 @@ const en = {
     sortMarketPrice: 'Market Price',
     sortTrend: 'Price Trend',
     sortSet: 'Set',
+    sortCardId: 'Card ID',
     desc: 'Desc',
     asc: 'Asc',
     card: 'Card',
@@ -256,6 +258,12 @@ const en = {
     removeFailed: 'Failed to remove',
     updated: 'Updated!',
     removed: 'Removed from collection',
+    remove: 'Remove from collection',
+    cloned: 'Added another copy',
+    addAnotherVersion: 'Add another version',
+    addToBinder: 'Add to binder...',
+    addedToBinder: 'Added to binder',
+    noCollectionBinders: 'No collection binders yet',
     filterSet: 'Set',
     filterType: 'Type',
     filterMinPrice: 'Min €',
@@ -340,6 +348,9 @@ const en = {
     binderName: 'Binder name...',
     description: 'Description (optional)',
     color: 'Color',
+    icon: 'Icon',
+    chooseIcon: 'Choose Pokémon icon',
+    clearIcon: 'Clear icon',
     card: 'card',
     cards: 'cards',
     created: 'Binder created!',
@@ -699,6 +710,8 @@ const en = {
     cards: 'cards',
     loadFailed: 'Failed to load set.',
     goBack: 'Go Back',
+    addVersion: 'Add version',
+    ownedVersions: 'Owned versions',
   },
 
   // Card modal

@@ -1,14 +1,68 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Check } from 'lucide-react'
-import { getSetChecklist, addToCollection } from '../api/client'
+import { ArrowLeft, Plus, Check, Trash2, X } from 'lucide-react'
+import { getSetChecklist, addToCollection, updateCollectionItem, removeFromCollection } from '../api/client'
 import { useSettings } from '../contexts/SettingsContext'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 import { resolveCardImageUrl, resolveSetImageUrl } from '../utils/imageUrl'
-import { getDefaultVariantOrNull } from '../utils/cardVariants'
+import { CARD_VARIANTS, getAvailableVariants, getDefaultVariantOrNull } from '../utils/cardVariants'
 import FallbackBadges from '../components/FallbackBadges'
+
+function SetCardActionModal({ card, setLang, onClose, onAdd, onRemove, t }) {
+  if (!card) return null
+  const availableVariants = getAvailableVariants(card)
+  const variants = availableVariants.length > 0 ? availableVariants : CARD_VARIANTS
+  const ownedItems = card.owned_items || []
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm md:flex md:items-center md:justify-center" onClick={onClose}>
+      <div className="fixed bottom-0 left-0 right-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-bg-surface border-t border-border p-5 md:static md:w-full md:max-w-md md:rounded-2xl md:border" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-text-primary">{card.name}</h2>
+            <p className="text-xs text-text-muted">#{card.number} · {setLang.toUpperCase()}</p>
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={18} /></button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">{t('setDetail.addVersion')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {variants.map((variant) => (
+                <button key={variant} onClick={() => onAdd(card, variant === 'Normal' ? null : variant)} className="btn-ghost justify-center text-sm">
+                  <Plus size={14} /> {variant}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {ownedItems.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">{t('setDetail.ownedVersions')}</p>
+              <div className="space-y-2">
+                {ownedItems.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 rounded-xl bg-bg-card border border-border p-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-text-primary font-medium">
+                        {[item.variant || 'Normal', item.condition, `${item.quantity}x`].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <button onClick={() => onRemove(item)} className="btn-ghost text-brand-red border-brand-red/30 hover:bg-brand-red/10 px-2 py-1.5" title={t('collection.remove')}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function SetDetail() {
   const { setId } = useParams()
@@ -16,6 +70,7 @@ export default function SetDetail() {
   const { t } = useSettings()
   const queryClient = useQueryClient()
   const [filter, setFilter] = useState('all')
+  const [selectedCard, setSelectedCard] = useState(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['set-checklist', setId],
@@ -25,19 +80,33 @@ export default function SetDetail() {
   const setLang = data?.set?.lang || 'en'
 
   const addMutation = useMutation({
-    mutationFn: (card) => addToCollection({
+    mutationFn: ({ card, variant }) => addToCollection({
       card_id: card.id,
       quantity: 1,
       condition: 'NM',
-      variant: getDefaultVariantOrNull(card),
+      variant: variant === undefined ? getDefaultVariantOrNull(card) : variant,
       lang: setLang,
     }),
     onSuccess: () => {
       toast.success(t('card.addedToCollection'))
       queryClient.invalidateQueries({ queryKey: ['set-checklist', setId] })
       queryClient.invalidateQueries({ queryKey: ['collection'] })
+      setSelectedCard(null)
     },
     onError: () => toast.error(t('card.addFailed')),
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (item) => item.quantity > 1
+      ? updateCollectionItem(item.id, { quantity: item.quantity - 1 })
+      : removeFromCollection(item.id),
+    onSuccess: () => {
+      toast.success(t('collection.removed'))
+      queryClient.invalidateQueries({ queryKey: ['set-checklist', setId] })
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      setSelectedCard(null)
+    },
+    onError: () => toast.error(t('collection.removeFailed')),
   })
 
   if (isLoading) {
@@ -149,14 +218,14 @@ export default function SetDetail() {
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
         {filteredCards.map((card) => (
           <div key={card.id}
-            onClick={() => { if (!card.owned) addMutation.mutate(card) }}
-            onKeyDown={(e) => { if (!card.owned && (e.key === 'Enter' || e.key === ' ')) addMutation.mutate(card) }}
-            role={card.owned ? undefined : 'button'}
-            tabIndex={card.owned ? undefined : 0}
+            onClick={() => setSelectedCard(card)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedCard(card) }}
+            role="button"
+            tabIndex={0}
             className={clsx(
               'relative group rounded-lg overflow-hidden transition-all duration-200',
               card.owned
-                ? 'ring-2 ring-green/50 hover:ring-green cursor-default'
+                ? 'ring-2 ring-green/50 hover:ring-green cursor-pointer'
                 : 'opacity-60 hover:opacity-90 ring-1 ring-brand-red/30 hover:ring-brand-red/60 cursor-pointer'
             )}>
             {resolveCardImageUrl(card) ? (
@@ -170,12 +239,10 @@ export default function SetDetail() {
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
               <p className="text-white text-xs font-medium text-center px-1 line-clamp-2">{card.name}</p>
               <FallbackBadges card={card} className="justify-center" compact />
-              {!card.owned && (
-                <button onClick={(e) => { e.stopPropagation(); addMutation.mutate(card) }}
-                  className="bg-brand-red text-white rounded-full p-1">
-                  <Plus size={12} />
-                </button>
-              )}
+              <button onClick={(e) => { e.stopPropagation(); setSelectedCard(card) }}
+                className="bg-brand-red text-white rounded-full p-1">
+                <Plus size={12} />
+              </button>
             </div>
 
             {card.owned && (
@@ -195,6 +262,15 @@ export default function SetDetail() {
           </div>
         ))}
       </div>
+
+      <SetCardActionModal
+        card={selectedCard}
+        setLang={setLang}
+        onClose={() => setSelectedCard(null)}
+        onAdd={(card, variant) => addMutation.mutate({ card, variant })}
+        onRemove={(item) => removeMutation.mutate(item)}
+        t={t}
+      />
     </div>
   )
 }

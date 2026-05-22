@@ -515,7 +515,7 @@ export const CardItem = memo(function CardItem({ card, showActions = true, onAdd
   )
 })
 
-export function CardModal({ card, onClose, onEdit, defaultLang = 'en' }) {
+export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItems = null }) {
   if (!card || !card.id) return null
 
   const [quantity, setQuantity] = useState(1)
@@ -563,6 +563,8 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en' }) {
     || resolveCardImageUrl(card, 'large')
     || resolveCardImageUrl(card)
   const setName = card.set?.name || card.set_ref?.name
+  const modalOwnedItems = ownedItems || card.owned_items || []
+  const ownedQuantity = card.owned_quantity ?? modalOwnedItems.reduce((sum, item) => sum + (item.quantity || 0), 0)
 
   const addMutation = useMutation({
     mutationFn: (data) => addToCollection(data),
@@ -901,6 +903,20 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en' }) {
               </div>
             )}
             <div className="space-y-3">
+              {ownedQuantity > 0 && (
+                <div className="rounded-xl border border-green/30 bg-green/10 p-3">
+                  <p className="text-sm font-semibold text-green">✓ {t('cardSearch.alreadyOwned')} · {ownedQuantity}x</p>
+                  {modalOwnedItems.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {modalOwnedItems.map(item => (
+                        <span key={item.id} className="text-[10px] px-2 py-1 rounded-full bg-bg-elevated text-text-secondary border border-border">
+                          {[item.variant || 'Normal', item.condition, `${item.quantity}x`].filter(Boolean).join(' · ')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-text-muted mb-1 block">{t('card.quantity')}</label>
