@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Check, Trash2, X } from 'lucide-react'
@@ -63,7 +64,7 @@ function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, o
   const variants = availableVariants.length > 0 ? availableVariants : CARD_VARIANTS
   const ownedItems = card.owned_items || []
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm md:flex md:items-center md:justify-center md:bg-black/80" onClick={onClose}>
       <div
         className={[
@@ -119,7 +120,8 @@ function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, o
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
