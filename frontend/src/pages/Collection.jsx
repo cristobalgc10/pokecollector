@@ -372,20 +372,26 @@ function CollectionEditModal({ item, onClose }) {
   }
 
   const binderSelect = (
-    <select
-      className="select text-sm"
-      value=""
-      onChange={(e) => {
-        if (e.target.value) addToBinderMutation.mutate(parseInt(e.target.value, 10))
-      }}
-      disabled={addToBinderMutation.isPending || collectionBinders.length === 0}
-    >
-      <option value="">{collectionBinders.length === 0 ? t('collection.noCollectionBinders') : t('collection.addToBinder')}</option>
-      {collectionBinders.map(binder => <option key={binder.id} value={binder.id}>{binder.name}</option>)}
-    </select>
+    collectionBinders.length === 0 ? (
+      <div className="select text-sm flex items-center justify-center text-center text-text-muted cursor-not-allowed">
+        {t('collection.noCollectionBinders')}
+      </div>
+    ) : (
+      <select
+        className="select text-sm"
+        value=""
+        onChange={(e) => {
+          if (e.target.value) addToBinderMutation.mutate(parseInt(e.target.value, 10))
+        }}
+        disabled={addToBinderMutation.isPending}
+      >
+        <option value="">{t('collection.addToBinder')}</option>
+        {collectionBinders.map(binder => <option key={binder.id} value={binder.id}>{binder.name}</option>)}
+      </select>
+    )
   )
 
-  const renderCardHeader = (showBack = false) => (
+  const renderCardHeader = () => (
     <div className="flex items-start gap-4 mb-5">
       {cardImage && (
         <img src={cardImage} alt={card?.name} className="w-20 rounded-xl shadow-lg flex-shrink-0" />
@@ -393,15 +399,6 @@ function CollectionEditModal({ item, onClose }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            {showBack && (
-              <button
-                type="button"
-                onClick={() => setShowAddVersionForm(false)}
-                className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary mb-1"
-              >
-                <ArrowLeft size={14} /> {t('common.back')}
-              </button>
-            )}
             <h2 className="text-base font-bold text-text-primary break-words">{card?.name}</h2>
             {card?.set_ref?.name && (
               <p className="text-xs text-text-secondary mt-0.5">
@@ -604,7 +601,7 @@ function CollectionEditModal({ item, onClose }) {
               cloneMutation.mutate()
             }}
           >
-            {renderCardHeader(true)}
+            {renderCardHeader()}
 
             <div className="space-y-3">
               <div className="bg-bg-card rounded-xl p-3 border border-brand-red/30 shadow-lg shadow-black/10">
@@ -685,7 +682,7 @@ function CollectionEditModal({ item, onClose }) {
                   disabled={cloneMutation.isPending}
                   className="btn-ghost justify-center"
                 >
-                  {t('common.cancel')}
+                  <ArrowLeft size={14} /> {t('common.back')}
                 </button>
               </div>
             </div>
