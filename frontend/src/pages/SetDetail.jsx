@@ -10,7 +10,54 @@ import { resolveCardImageUrl, resolveSetImageUrl } from '../utils/imageUrl'
 import { CARD_VARIANTS, getAvailableVariants, getDefaultVariantOrNull } from '../utils/cardVariants'
 import FallbackBadges from '../components/FallbackBadges'
 
-function SetCardActionModal({ card, setLang, onClose, onAdd, onRemove, t }) {
+function OwnedVersionRow({ item, onQuantityChange, onRemove, isUpdating, isRemoving, t }) {
+  const [quantity, setQuantity] = useState(item.quantity || 1)
+  const [savedQuantity, setSavedQuantity] = useState(item.quantity || 1)
+
+  const commitQuantity = () => {
+    const nextQuantity = Math.max(1, parseInt(quantity, 10) || 1)
+    setQuantity(nextQuantity)
+    if (nextQuantity !== savedQuantity) {
+      setSavedQuantity(nextQuantity)
+      onQuantityChange(item, nextQuantity)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-bg-card border border-border p-2">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-text-primary font-medium truncate">
+          {[item.variant || 'Normal', item.condition].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+      <input
+        type="number"
+        min="1"
+        value={quantity}
+        onChange={(e) => setQuantity(e.target.value)}
+        onBlur={commitQuantity}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+        }}
+        disabled={isUpdating || isRemoving}
+        className="input text-center px-2 py-1.5"
+        style={{ width: '4.25rem' }}
+        aria-label={t('card.quantity')}
+        title={t('card.quantity')}
+      />
+      <button
+        onClick={() => onRemove(item)}
+        disabled={isRemoving}
+        className="btn-ghost text-brand-red border-brand-red/30 hover:bg-brand-red/10 px-2 py-1.5"
+        title={t('collection.remove')}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  )
+}
+
+function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, onRemove, isUpdatingQuantity, isRemoving, t }) {
   if (!card) return null
   const availableVariants = getAvailableVariants(card)
   const variants = availableVariants.length > 0 ? availableVariants : CARD_VARIANTS
@@ -44,16 +91,15 @@ function SetCardActionModal({ card, setLang, onClose, onAdd, onRemove, t }) {
               <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">{t('setDetail.ownedVersions')}</p>
               <div className="space-y-2">
                 {ownedItems.map(item => (
-                  <div key={item.id} className="flex items-center gap-2 rounded-xl bg-bg-card border border-border p-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-text-primary font-medium">
-                        {[item.variant || 'Normal', item.condition, `${item.quantity}x`].filter(Boolean).join(' · ')}
-                      </p>
-                    </div>
-                    <button onClick={() => onRemove(item)} className="btn-ghost text-brand-red border-brand-red/30 hover:bg-brand-red/10 px-2 py-1.5" title={t('collection.remove')}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  <OwnedVersionRow
+                    key={item.id}
+                    item={item}
+                    onQuantityChange={onQuantityChange}
+                    onRemove={onRemove}
+                    isUpdating={isUpdatingQuantity}
+                    isRemoving={isRemoving}
+                    t={t}
+                  />
                 ))}
               </div>
             </div>
@@ -97,9 +143,7 @@ export default function SetDetail() {
   })
 
   const removeMutation = useMutation({
-    mutationFn: (item) => item.quantity > 1
-      ? updateCollectionItem(item.id, { quantity: item.quantity - 1 })
-      : removeFromCollection(item.id),
+    mutationFn: (item) => removeFromCollection(item.id),
     onSuccess: () => {
       toast.success(t('collection.removed'))
       queryClient.invalidateQueries({ queryKey: ['set-checklist', setId] })
@@ -107,6 +151,16 @@ export default function SetDetail() {
       setSelectedCard(null)
     },
     onError: () => toast.error(t('collection.removeFailed')),
+  })
+
+  const quantityMutation = useMutation({
+    mutationFn: ({ item, quantity }) => updateCollectionItem(item.id, { quantity }),
+    onSuccess: () => {
+      toast.success(t('collection.updated'))
+      queryClient.invalidateQueries({ queryKey: ['set-checklist', setId] })
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+    },
+    onError: () => toast.error(t('collection.updateFailed')),
   })
 
   if (isLoading) {
@@ -268,7 +322,10 @@ export default function SetDetail() {
         setLang={setLang}
         onClose={() => setSelectedCard(null)}
         onAdd={(card, variant) => addMutation.mutate({ card, variant })}
+        onQuantityChange={(item, quantity) => quantityMutation.mutate({ item, quantity })}
         onRemove={(item) => removeMutation.mutate(item)}
+        isUpdatingQuantity={quantityMutation.isPending}
+        isRemoving={removeMutation.isPending}
         t={t}
       />
     </div>
