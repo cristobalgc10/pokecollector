@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -10,6 +10,8 @@ import clsx from 'clsx'
 import { resolveCardImageUrl, resolveSetImageUrl } from '../utils/imageUrl'
 import { CARD_VARIANTS, getAvailableVariants, getDefaultVariantOrNull } from '../utils/cardVariants'
 import FallbackBadges from '../components/FallbackBadges'
+
+const CONDITIONS = ['Mint', 'NM', 'LP', 'MP', 'HP']
 
 function OwnedVersionRow({ item, onQuantityChange, onRemove, isUpdating, isRemoving, t }) {
   const [quantity, setQuantity] = useState(item.quantity || 1)
@@ -58,11 +60,38 @@ function OwnedVersionRow({ item, onQuantityChange, onRemove, isUpdating, isRemov
   )
 }
 
-function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, onRemove, isUpdatingQuantity, isRemoving, t }) {
+function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, onRemove, isAdding, isUpdatingQuantity, isRemoving, t }) {
+  const [addQuantity, setAddQuantity] = useState(1)
+  const [addCondition, setAddCondition] = useState('NM')
+  const [addVariant, setAddVariant] = useState('')
+  const [addLang, setAddLang] = useState(setLang)
+  const [addPrice, setAddPrice] = useState('')
+
+  useEffect(() => {
+    if (!card) return
+    setAddQuantity(1)
+    setAddCondition('NM')
+    setAddVariant(getDefaultVariantOrNull(card) || '')
+    setAddLang(setLang)
+    setAddPrice('')
+  }, [card, setLang])
+
   if (!card) return null
   const availableVariants = getAvailableVariants(card)
   const variants = availableVariants.length > 0 ? availableVariants : CARD_VARIANTS
   const ownedItems = card.owned_items || []
+
+  const submitAddVersion = (event) => {
+    event.preventDefault()
+    onAdd({
+      card,
+      quantity: Math.max(1, parseInt(addQuantity, 10) || 1),
+      condition: addCondition,
+      variant: addVariant || null,
+      lang: addLang,
+      purchase_price: addPrice ? parseFloat(addPrice) : undefined,
+    })
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm md:flex md:items-center md:justify-center md:bg-black/80" onClick={onClose}>
@@ -88,16 +117,76 @@ function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, o
           </div>
 
           <div className="space-y-4">
-            <div>
+            <form onSubmit={submitAddVersion} className="space-y-3 rounded-xl border border-brand-red/30 bg-bg-card p-3">
               <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">{t('setDetail.addVersion')}</p>
-              <div className="grid grid-cols-2 gap-2">
-                {variants.map((variant) => (
-                  <button key={variant} onClick={() => onAdd(card, variant === 'Normal' ? null : variant)} className="btn-ghost justify-center text-sm">
-                    <Plus size={14} /> {variant}
-                  </button>
-                ))}
+              <p className="text-xs text-text-secondary -mt-1">{t('collection.addAnotherVersionHelp')}</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-text-muted mb-1 block">{t('card.quantity')}</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={addQuantity}
+                    onChange={(e) => setAddQuantity(e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-text-muted mb-1 block">{t('card.condition')}</label>
+                  <select value={addCondition} onChange={(e) => setAddCondition(e.target.value)} className="select">
+                    {CONDITIONS.map(condition => <option key={condition} value={condition}>{condition}</option>)}
+                  </select>
+                </div>
               </div>
-            </div>
+
+              <div>
+                <label className="text-xs text-text-muted mb-1 block">✨ {t('card.variant')}</label>
+                <select value={addVariant} onChange={(e) => setAddVariant(e.target.value)} className="select">
+                  {variants.map(variant => <option key={variant} value={variant === 'Normal' ? '' : variant}>{variant}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-text-muted mb-1.5 block">🌐 {t('lang.selectLabel')}</label>
+                <div className="flex gap-2">
+                  {['de', 'en'].map(lang => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setAddLang(lang)}
+                      className={clsx(
+                        'flex-1 py-1.5 rounded-lg text-sm font-bold transition-all border',
+                        addLang === lang
+                          ? lang === 'de'
+                            ? 'bg-yellow/20 text-yellow border-yellow/50'
+                            : 'bg-blue/20 text-blue-400 border-blue-400/50'
+                          : 'bg-bg-surface text-text-muted border-border hover:border-text-muted'
+                      )}
+                    >
+                      {lang === 'de' ? `🇩🇪 ${t('lang.de_full')}` : `🇬🇧 ${t('lang.en_full')}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-text-muted mb-1 block">{t('card.purchasePrice')}</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder={t('card.purchasePricePlaceholder')}
+                  value={addPrice}
+                  onChange={(e) => setAddPrice(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <button type="submit" disabled={isAdding} className="btn-primary w-full justify-center">
+                <Plus size={14} /> {isAdding ? t('card.adding') : t('collection.addVersionToCollection')}
+              </button>
+            </form>
 
             {ownedItems.length > 0 && (
               <div>
@@ -141,12 +230,13 @@ export default function SetDetail() {
   const setLang = data?.set?.lang || 'en'
 
   const addMutation = useMutation({
-    mutationFn: ({ card, variant }) => addToCollection({
+    mutationFn: ({ card, quantity = 1, condition = 'NM', variant, lang = setLang, purchase_price }) => addToCollection({
       card_id: card.id,
-      quantity: 1,
-      condition: 'NM',
+      quantity,
+      condition,
       variant: variant === undefined ? getDefaultVariantOrNull(card) : variant,
-      lang: setLang,
+      lang,
+      purchase_price,
     }),
     onSuccess: () => {
       toast.success(t('card.addedToCollection'))
@@ -336,9 +426,10 @@ export default function SetDetail() {
         card={selectedCard}
         setLang={setLang}
         onClose={() => setSelectedCard(null)}
-        onAdd={(card, variant) => addMutation.mutate({ card, variant })}
+        onAdd={(payload) => addMutation.mutate(payload)}
         onQuantityChange={(item, quantity) => quantityMutation.mutate({ item, quantity })}
         onRemove={(item) => removeMutation.mutate(item)}
+        isAdding={addMutation.isPending}
         isUpdatingQuantity={quantityMutation.isPending}
         isRemoving={removeMutation.isPending}
         t={t}
