@@ -10,6 +10,93 @@ import { resolveCardImageUrl } from '../utils/imageUrl'
 
 const SPRITE_BASE_URL = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated'
 const CONDITIONS = ['Mint', 'NM', 'LP', 'MP', 'HP']
+const BINDER_CSV_IMPORT_HEADER = 'set_code,number,required_quantity,lang'
+const BINDER_CSV_IMPORT_TEMPLATE = `${BINDER_CSV_IMPORT_HEADER}\nBLK,057,4,de\n`
+
+const downloadBinderCsvTemplate = () => {
+  const blob = new Blob([BINDER_CSV_IMPORT_TEMPLATE], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'binder-import-template.csv'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function BinderCsvImportModal({ t, isWishlist, onClose, onChooseFile, onDownloadTemplate, isImporting }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm md:flex md:items-center md:justify-center md:bg-black/80" onClick={onClose}>
+      <div
+        className="fixed bottom-0 left-0 right-0 rounded-t-2xl max-h-[90dvh] overflow-y-auto bg-bg-surface border-t border-border md:static md:rounded-2xl md:border md:max-w-lg md:w-full md:max-h-[85vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-center pt-3 pb-1 md:hidden">
+          <div className="w-10 h-1 bg-border rounded-full" />
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-text-primary">{t('binderTypes.csvImportTitle')}</h2>
+              <p className="text-xs text-text-secondary mt-1">
+                {isWishlist ? t('binderTypes.csvImportWishlistDescription') : t('binderTypes.csvImportCollectionDescription')}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-text-muted hover:text-text-primary flex-shrink-0 p-1">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={onChooseFile} disabled={isImporting} className="btn-primary justify-center">
+              <Upload size={16} /> {isImporting ? t('binderTypes.importingCsv') : t('binderTypes.importCsv')}
+            </button>
+            <button type="button" onClick={onDownloadTemplate} className="btn-ghost justify-center">
+              <Download size={16} /> {t('binderTypes.downloadCsvTemplate')}
+            </button>
+          </div>
+
+          <div className="rounded-xl bg-bg-elevated/35 p-3 text-xs text-text-secondary space-y-3">
+            <div className="space-y-1">
+              <p className="font-semibold text-text-primary">{t('binderTypes.csvImportSectionCardCode')}</p>
+              <p>{t('binderTypes.csvImportValueHelp')}</p>
+              <p className="font-mono text-[11px] text-text-primary">
+                <span className="text-brand-red">BLK</span> → set_code · <span className="text-brand-red">057</span> → number
+              </p>
+            </div>
+
+            <div className="border-t border-white/5 pt-3 space-y-2">
+              <p className="font-semibold text-text-primary">{t('binderTypes.csvImportSectionColumns')}</p>
+              <code className="block overflow-x-auto rounded-lg bg-bg/70 px-3 py-2 text-[11px] text-text-primary font-mono">
+                {BINDER_CSV_IMPORT_HEADER}
+              </code>
+              <p className="rounded-lg bg-brand-red/10 px-3 py-2 text-[11px] text-text-secondary">
+                {t('binderTypes.csvImportRequiredOptionalHint')}
+              </p>
+            </div>
+
+            <div className="border-t border-white/5 pt-3 space-y-2">
+              <p className="font-semibold text-text-primary">{t('binderTypes.csvImportSectionValues')}</p>
+              <div className="rounded-lg bg-bg/60 px-3 py-2">
+                <p className="text-[11px] font-semibold text-text-primary mb-1">{t('binderTypes.csvImportDefaultsTitle')}</p>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div><span className="font-mono text-text-primary">required_quantity</span><br /><span className="text-text-muted">1</span></div>
+                  <div><span className="font-mono text-text-primary">lang</span><br /><span className="text-text-muted">en</span></div>
+                </div>
+              </div>
+              <p>{isWishlist ? t('binderTypes.csvImportWishlistBehavior') : t('binderTypes.csvImportCollectionBehavior')}</p>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-yellow/90 bg-yellow/10 rounded-lg px-3 py-2">
+            {t('binderTypes.csvImportErrorBehavior')}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function TiltBinderCard({ className, onClick, children }) {
   const { ref, onMouseMove, onMouseEnter, onMouseLeave } = useTilt(10)
@@ -41,6 +128,7 @@ export default function BinderDetail() {
   const [binderFilterStatus, setBinderFilterStatus] = useState('')
   const [binderFilterQuery, setBinderFilterQuery] = useState('')
   const [selectedCard, setSelectedCard] = useState(null)
+  const [showCsvImportModal, setShowCsvImportModal] = useState(false)
   const fileInputRef = useRef(null)
 
   const { data, isLoading } = useQuery({
@@ -157,10 +245,11 @@ export default function BinderDetail() {
   const importMutation = useMutation({
     mutationFn: (file) => importBinderCsv(parseInt(binderId), file),
     onSuccess: (result) => {
-      toast.success(`CSV: ${result.added} added, ${result.updated} updated${result.failed ? `, ${result.failed} failed` : ''}`)
+      toast.success(`CSV: ${result.added} added, ${result.updated} updated${result.skipped ? `, ${result.skipped} skipped` : ''}${result.failed ? `, ${result.failed} failed` : ''}`)
       if (result.errors?.length) console.warn('Binder CSV import errors', result.errors)
       queryClient.invalidateQueries({ queryKey: ['binder-cards', binderId] })
       queryClient.invalidateQueries({ queryKey: ['binders'] })
+      setShowCsvImportModal(false)
     },
     onError: (e) => toast.error(e.response?.data?.detail || 'CSV import failed'),
   })
@@ -232,13 +321,23 @@ export default function BinderDetail() {
           <button onClick={() => setShowSearch(!showSearch)} className="btn-primary flex-shrink-0">
             <Plus size={16} /> {t('common.add')} {t('nav.cards')}
           </button>
-          {isWishlist && (
-            <button onClick={() => fileInputRef.current?.click()} className="btn-ghost flex-shrink-0" disabled={importMutation.isPending}>
-              <Upload size={16} /> {t('binderTypes.importCsv')}
-            </button>
-          )}
-          <button onClick={() => exportMutation.mutate()} className="btn-ghost flex-shrink-0" disabled={exportMutation.isPending || cards.length === 0}>
-            <Download size={16} /> {t('binderTypes.exportCsv')}
+          <button
+            onClick={() => setShowCsvImportModal(true)}
+            className="btn-ghost flex-shrink-0 px-2"
+            disabled={importMutation.isPending}
+            title={t('binderTypes.importCsv')}
+            aria-label={t('binderTypes.importCsv')}
+          >
+            <Upload size={16} />
+          </button>
+          <button
+            onClick={() => exportMutation.mutate()}
+            className="btn-ghost flex-shrink-0 px-2"
+            disabled={exportMutation.isPending || cards.length === 0}
+            title={t('binderTypes.exportCsv')}
+            aria-label={t('binderTypes.exportCsv')}
+          >
+            <Download size={16} />
           </button>
           <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         </div>
@@ -256,7 +355,6 @@ export default function BinderDetail() {
           <div>
             <p className="text-sm font-medium text-text-primary">{t('binderTypes.deckStyleBinder')}</p>
             <p className="text-xs text-text-muted">{t('binderTypes.formatMetadataHelp')}</p>
-            {isWishlist && <p className="text-xs text-text-muted mt-1">{t('binderTypes.csvFormatHint')}</p>}
           </div>
           {binder?.format && <span className="text-xs px-2 py-1 rounded-full bg-yellow/15 text-yellow font-semibold">{binder.format}</span>}
         </div>
@@ -440,11 +538,6 @@ export default function BinderDetail() {
                   {card.price_market && <p className="text-xs text-green">€{card.price_market.toFixed(2)}</p>}
                 </div>
 
-                <button onClick={(e) => { e.stopPropagation(); removeMutation.mutate({ cardId: card.id, binderCardId: card.binder_card_id }) }}
-                  className="absolute top-1 right-1 bg-bg/80 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-brand-red hover:text-brand-red-light">
-                  <Trash2 size={10} />
-                </button>
-
                 {isWishlist && (
                   <div className={`absolute top-1 left-1 rounded-full text-white text-xs px-1.5 py-0.5 font-medium ${
                     isComplete ? 'bg-green/90' : 'bg-bg-elevated/90 text-text-secondary'
@@ -462,6 +555,17 @@ export default function BinderDetail() {
             )
           })}
         </div>
+      )}
+
+      {showCsvImportModal && (
+        <BinderCsvImportModal
+          t={t}
+          isWishlist={isWishlist}
+          onClose={() => setShowCsvImportModal(false)}
+          onChooseFile={() => fileInputRef.current?.click()}
+          onDownloadTemplate={downloadBinderCsvTemplate}
+          isImporting={importMutation.isPending}
+        />
       )}
 
       {selectedCard && (

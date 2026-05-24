@@ -924,11 +924,12 @@ export default function Collection() {
             onClick={() => setShowCsvImportModal(true)}
             disabled={csvImportMutation.isPending}
             title={t('collection.importCsvHint')}
-            className="btn-ghost text-sm py-1.5"
+            aria-label={t('collection.importCsv')}
+            className="btn-ghost text-sm py-1.5 px-2"
           >
-            <Upload size={14} /> {csvImportMutation.isPending ? t('collection.importingCsv') : t('collection.importCsv')}
+            <Upload size={14} />
           </button>
-          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5"><Download size={14} />CSV</button>
+          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5 px-2" title="CSV" aria-label="CSV"><Download size={14} /></button>
           <button onClick={exportPDF} className="btn-ghost text-sm py-1.5"><Download size={14} />PDF</button>
         </div>
       </div>

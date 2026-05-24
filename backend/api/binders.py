@@ -232,7 +232,7 @@ def get_binder_cards(
             "rarity": bc.card.rarity,
             "images_small": bc.card.images_small,
             "images_large": bc.card.images_large,
-            "price_market": bc.card.price_market,
+            "price_market": price,
             "in_collection": in_collection,
             "owned": in_collection,
             "quantity": owned_quantity,
@@ -438,6 +438,7 @@ def export_binder_csv(
     rows = db.query(BinderCard).options(
         joinedload(BinderCard.card).joinedload(Card.set_ref)
     ).filter(BinderCard.binder_id == binder_id).order_by(BinderCard.added_at.asc()).all()
+    binder_type = binder.binder_type or "collection"
 
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=BINDER_CSV_COLUMNS)
@@ -446,6 +447,19 @@ def export_binder_csv(
         card = entry.card
         if not card:
             continue
+        if binder_type == "collection":
+            if entry.collection_item_id:
+                is_visible = db.query(CollectionItem.id).filter(
+                    CollectionItem.id == entry.collection_item_id,
+                    CollectionItem.user_id == current_user.id,
+                ).first() is not None
+            else:
+                is_visible = db.query(CollectionItem.id).filter(
+                    CollectionItem.card_id == entry.card_id,
+                    CollectionItem.user_id == current_user.id,
+                ).first() is not None
+            if not is_visible:
+                continue
         set_ref = card.set_ref
         writer.writerow({
             "set_code": (set_ref.abbreviation if set_ref and set_ref.abbreviation else card.set_id),
@@ -476,8 +490,6 @@ async def import_binder_csv(
     ).first()
     if not binder:
         raise HTTPException(status_code=404, detail="Binder not found")
-    if (binder.binder_type or "collection") != "wishlist":
-        raise HTTPException(status_code=400, detail="CSV import is available for wishlist binders")
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=422, detail="Please upload a .csv file")
 
@@ -495,9 +507,21 @@ async def import_binder_csv(
 
     added = 0
     updated = 0
+    skipped = 0
     failed = 0
     errors: List[str] = []
     row_count = 0
+    binder_type = binder.binder_type or "collection"
+    validated_rows = []
+    planned_card_ids = set()
+    existing_collection_item_ids = {
+        item_id for (item_id,) in db.query(BinderCard.collection_item_id)
+        .filter(
+            BinderCard.binder_id == binder_id,
+            BinderCard.collection_item_id.isnot(None),
+        )
+        .all()
+    }
 
     for row_number, row in enumerate(reader, start=2):
         if None in row:
@@ -521,23 +545,38 @@ async def import_binder_csv(
             required_quantity = _safe_required_quantity(row.get("required_quantity"))
             card = _find_card_by_code(db, set_code, number, lang)
 
+            if binder_type == "collection":
+                owned_items = db.query(CollectionItem).filter(
+                    CollectionItem.card_id == card.id,
+                    CollectionItem.user_id == current_user.id,
+                ).order_by(CollectionItem.id.asc()).all()
+                if not owned_items:
+                    skipped += 1
+                    continue
+                item_to_add = next(
+                    (item for item in owned_items if item.id not in existing_collection_item_ids),
+                    None,
+                )
+                if not item_to_add:
+                    skipped += 1
+                    continue
+                existing_collection_item_ids.add(item_to_add.id)
+                validated_rows.append({"action": "add_collection_item", "item": item_to_add})
+                continue
+
             existing = db.query(BinderCard).filter(
                 BinderCard.binder_id == binder_id,
                 BinderCard.card_id == card.id,
                 BinderCard.collection_item_id.is_(None),
             ).first()
             if existing:
-                existing.required_quantity = required_quantity
-                updated += 1
+                validated_rows.append({"action": "update", "entry": existing, "required_quantity": required_quantity})
             else:
-                db.add(BinderCard(
-                    binder_id=binder_id,
-                    card_id=card.id,
-                    required_quantity=required_quantity,
-                    added_at=datetime.datetime.utcnow(),
-                ))
-                added += 1
-            db.commit()
+                if card.id in planned_card_ids:
+                    skipped += 1
+                    continue
+                planned_card_ids.add(card.id)
+                validated_rows.append({"action": "add_card", "card": card, "required_quantity": required_quantity})
         except HTTPException as exc:
             db.rollback()
             failed += 1
@@ -547,7 +586,40 @@ async def import_binder_csv(
             failed += 1
             errors.append(f"row {row_number}: {str(exc)}")
 
-    return {"added": added, "updated": updated, "failed": failed, "errors": errors}
+    if failed:
+        return {"added": 0, "updated": 0, "skipped": skipped, "failed": failed, "errors": errors}
+
+    try:
+        for item in validated_rows:
+            action = item["action"]
+            if action == "add_collection_item":
+                collection_item = item["item"]
+                db.add(BinderCard(
+                    binder_id=binder_id,
+                    card_id=collection_item.card_id,
+                    collection_item_id=collection_item.id,
+                    required_quantity=1,
+                    added_at=datetime.datetime.utcnow(),
+                ))
+                added += 1
+            elif action == "update":
+                item["entry"].required_quantity = item["required_quantity"]
+                updated += 1
+            elif action == "add_card":
+                card = item["card"]
+                db.add(BinderCard(
+                    binder_id=binder_id,
+                    card_id=card.id,
+                    required_quantity=item["required_quantity"],
+                    added_at=datetime.datetime.utcnow(),
+                ))
+                added += 1
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {"added": 0, "updated": 0, "skipped": skipped, "failed": 1, "errors": [f"write failed: {str(exc)}"]}
+
+    return {"added": added, "updated": updated, "skipped": skipped, "failed": failed, "errors": errors}
 
 
 @router.delete("/{binder_id}/entries/{binder_card_id}")
