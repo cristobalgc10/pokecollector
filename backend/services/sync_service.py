@@ -484,9 +484,14 @@ def perform_full_sync(db: Session) -> dict:
             existing_card_count = db.query(Card).filter(
                 Card.set_id == tcg_id, Card.lang == set_lang
             ).count()
+            fallback_card_count = db.query(Card).filter(
+                Card.set_id == tcg_id,
+                Card.lang == set_lang,
+                (Card.image_source_lang != None) | (Card.price_source_lang != None),
+            ).count()
             set_total = set_obj.total or 0
-            if existing_card_count >= set_total and existing_card_count > 0:
-                continue  # Already have all cards for this lang
+            if existing_card_count >= set_total and existing_card_count > 0 and fallback_card_count == 0:
+                continue  # Already have all native cards for this lang
             try:
                 set_detail = pokemon_api.get_set_cards(tcg_id, lang=set_lang)
                 cards_data = set_detail.get("cards", [])

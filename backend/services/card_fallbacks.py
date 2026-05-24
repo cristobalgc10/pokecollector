@@ -4,6 +4,12 @@ TCGdex can have images or pricing in one language response while the matching
 card in another language has no public API data. These helpers keep the native
 card row but fill missing image/price fields from the sibling language when the
 admin setting allows it, and record the source language for visible UI tags.
+
+Some new sets appear in one language before the matching card endpoints exist
+in the other language. For those temporary gaps we can also create a card row in
+the requested language from the sibling language data. The row keeps the target
+DB id/lang (for example ``me04-001_de``), but marks borrowed images/prices so a
+later native sync can replace the fallback data in place.
 """
 
 from __future__ import annotations
@@ -46,6 +52,22 @@ PRICE_FIELDS = (
     "price_tcg_holo_market",
 )
 IMAGE_FIELDS = ("images_small", "images_large")
+CARD_COPY_FIELDS = (
+    "tcg_card_id",
+    "name",
+    "set_id",
+    "number",
+    "rarity",
+    "types",
+    "supertype",
+    "subtypes",
+    "hp",
+    "artist",
+    "variants_normal",
+    "variants_reverse",
+    "variants_holo",
+    "variants_first_edition",
+)
 
 
 def _setting_enabled(db: Session, key: str, default: bool = True) -> bool:
@@ -61,6 +83,11 @@ def _other_lang(lang: Optional[str]) -> Optional[str]:
     if lang == "en":
         return "de"
     return None
+
+
+def other_supported_lang(lang: Optional[str]) -> Optional[str]:
+    """Return the supported sibling language for public callers."""
+    return _other_lang(lang)
 
 
 def _has_price(data: dict) -> bool:
@@ -84,6 +111,20 @@ def _card_to_data(card: Card) -> dict:
     return data
 
 
+def _card_to_fallback_source(card: Card) -> dict:
+    data = {field: getattr(card, field, None) for field in CARD_COPY_FIELDS}
+    data.update(_card_to_data(card))
+    return data
+
+
+def _fallback_settings(db: Session, price_enabled: Optional[bool], image_enabled: Optional[bool]) -> tuple[bool, bool]:
+    if price_enabled is None:
+        price_enabled = _setting_enabled(db, "cross_language_price_fallback", True)
+    if image_enabled is None:
+        image_enabled = _setting_enabled(db, "cross_language_image_fallback", True)
+    return price_enabled, image_enabled
+
+
 def _load_sibling_data(db: Session, tcg_card_id: str, lang: str) -> Optional[dict]:
     sibling = db.query(Card).filter(
         Card.tcg_card_id == tcg_card_id,
@@ -102,6 +143,122 @@ def _load_sibling_data(db: Session, tcg_card_id: str, lang: str) -> Optional[dic
     if not card_data:
         return None
     return pokemon_api.parse_card_for_db(card_data, lang=lang)
+
+
+def clone_card_for_missing_language(
+    db: Session,
+    source: Card | dict,
+    *,
+    target_lang: str,
+    source_lang: Optional[str] = None,
+    default_set_id: Optional[str] = None,
+    price_enabled: Optional[bool] = None,
+    image_enabled: Optional[bool] = None,
+) -> Optional[dict]:
+    """Create a target-language card row from sibling-language card data.
+
+    This is used when TCGdex has a set/card in one language, but the requested
+    language endpoint is still missing. The returned row keeps the requested
+    language id (``<tcg_id>_<target_lang>``) so collection entries can already be
+    stored as German/English and later native syncs replace the fallback data.
+    """
+    target_lang = (target_lang or "").lower()
+    source_lang = (source_lang or "").lower() or None
+    if target_lang not in SUPPORTED_LANGS:
+        return None
+
+    if isinstance(source, Card):
+        parsed = _card_to_fallback_source(source)
+        source_lang = source_lang or source.lang
+    else:
+        source_lang = source_lang or source.get("_lang") or source.get("lang")
+        parsed = pokemon_api.parse_card_for_db(source, default_set_id=default_set_id, lang=source_lang)
+
+    source_lang = (source_lang or parsed.get("lang") or "").lower()
+    if source_lang not in SUPPORTED_LANGS or source_lang == target_lang:
+        return None
+
+    price_enabled, image_enabled = _fallback_settings(db, price_enabled, image_enabled)
+    if not (price_enabled or image_enabled):
+        return None
+
+    tcg_card_id = parsed.get("tcg_card_id") or pokemon_api.strip_lang_suffix(parsed.get("id", ""))[0]
+    if not tcg_card_id:
+        return None
+
+    parsed = parsed.copy()
+    parsed["id"] = f"{tcg_card_id}_{target_lang}"
+    parsed["tcg_card_id"] = tcg_card_id
+    parsed["lang"] = target_lang
+    if default_set_id and not parsed.get("set_id"):
+        parsed["set_id"] = default_set_id
+
+    parsed["price_source_lang"] = None
+    parsed["image_source_lang"] = None
+
+    if price_enabled and _has_price(parsed):
+        parsed["price_source_lang"] = source_lang
+    else:
+        for field in PRICE_FIELDS:
+            parsed[field] = None
+
+    if image_enabled and _has_image(parsed):
+        parsed["image_source_lang"] = source_lang
+    else:
+        for field in IMAGE_FIELDS:
+            parsed[field] = None
+
+    return parsed
+
+
+def build_missing_language_card(
+    db: Session,
+    tcg_card_id: str,
+    target_lang: str,
+    *,
+    default_set_id: Optional[str] = None,
+    price_enabled: Optional[bool] = None,
+    image_enabled: Optional[bool] = None,
+) -> Optional[dict]:
+    """Fetch sibling card data and clone it into the requested language."""
+    fallback_lang = _other_lang(target_lang)
+    if not tcg_card_id or not fallback_lang:
+        return None
+
+    sibling = db.query(Card).filter(
+        Card.tcg_card_id == tcg_card_id,
+        Card.lang == fallback_lang,
+        Card.is_custom == False,
+    ).first()
+    if sibling:
+        return clone_card_for_missing_language(
+            db,
+            sibling,
+            target_lang=target_lang,
+            source_lang=fallback_lang,
+            default_set_id=default_set_id,
+            price_enabled=price_enabled,
+            image_enabled=image_enabled,
+        )
+
+    try:
+        card_data = pokemon_api.get_card(tcg_card_id, lang=fallback_lang)
+    except Exception as exc:
+        logger.debug("Failed to fetch %s in %s for missing-language fallback: %s", tcg_card_id, fallback_lang, exc)
+        return None
+
+    if not card_data:
+        return None
+
+    return clone_card_for_missing_language(
+        db,
+        card_data,
+        target_lang=target_lang,
+        source_lang=fallback_lang,
+        default_set_id=default_set_id,
+        price_enabled=price_enabled,
+        image_enabled=image_enabled,
+    )
 
 
 def apply_cross_language_fallbacks(
@@ -129,10 +286,7 @@ def apply_cross_language_fallbacks(
     need_price = not _has_price(parsed)
     need_image = not _has_image(parsed)
 
-    if price_enabled is None:
-        price_enabled = _setting_enabled(db, "cross_language_price_fallback", True)
-    if image_enabled is None:
-        image_enabled = _setting_enabled(db, "cross_language_image_fallback", True)
+    price_enabled, image_enabled = _fallback_settings(db, price_enabled, image_enabled)
 
     if not ((need_price and price_enabled) or (need_image and image_enabled)):
         return parsed

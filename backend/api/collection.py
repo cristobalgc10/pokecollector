@@ -7,7 +7,7 @@ from database import get_db
 from models import CollectionItem, Card, Set, User
 from schemas import CollectionItemCreate, CollectionItemUpdate, CollectionItemResponse, BulkCollectionAddRequest, BulkCollectionAddResponse
 from services import pokemon_api
-from services.card_fallbacks import apply_cross_language_fallbacks
+from services.card_fallbacks import apply_cross_language_fallbacks, build_missing_language_card
 from services.card_values import effective_market_price
 import datetime
 import csv
@@ -36,14 +36,17 @@ def ensure_card_exists(db: Session, card_id: str, lang: str = "en") -> Card:
     if not card:
         tcg_card_id, _ = pokemon_api.strip_lang_suffix(card_id)
         card_data = pokemon_api.get_card(tcg_card_id, lang=lang)
-        if not card_data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Card {card_id} not found in local database. Please run a Sync first."
-            )
-        parsed = pokemon_api.parse_card_for_db(card_data, lang=lang)
-        parsed = apply_cross_language_fallbacks(db, parsed)
-        if parsed.get("set_id"):
+        if card_data:
+            parsed = pokemon_api.parse_card_for_db(card_data, lang=lang)
+            parsed = apply_cross_language_fallbacks(db, parsed)
+        else:
+            parsed = build_missing_language_card(db, tcg_card_id, lang)
+            if not parsed:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Card {card_id} not found in local database. Please run a Sync first."
+                )
+        if parsed.get("set_id") and card_data:
             set_data = card_data.get("set", {})
             if set_data:
                 set_parsed = pokemon_api.parse_set_for_db(set_data)
@@ -69,7 +72,8 @@ def ensure_card_exists(db: Session, card_id: str, lang: str = "en") -> Card:
 
 def _add_collection_item(db: Session, current_user: User, item: CollectionItemCreate, commit: bool = True) -> str:
     """Add one item and return "added" or "updated"."""
-    item_lang = item.lang or "en"
+    _, detected_lang = pokemon_api.strip_lang_suffix(item.card_id)
+    item_lang = item.lang or detected_lang or "en"
 
     if item.card_id.startswith("custom-"):
         effective_card_id = item.card_id
@@ -306,7 +310,8 @@ def add_to_collection(
     db: Session = Depends(get_db),
 ):
     """Add a card to the collection. Cards with identical card_id+variant+lang+condition+purchase_price are grouped."""
-    item_lang = item.lang or "en"
+    _, detected_lang = pokemon_api.strip_lang_suffix(item.card_id)
+    item_lang = item.lang or detected_lang or "en"
 
     # Resolve the correct language-variant card_id
     if item.card_id.startswith("custom-"):
@@ -373,7 +378,8 @@ def bulk_add_to_collection(
 
     for item in request.items:
         try:
-            item_lang = item.lang or "en"
+            _, detected_lang = pokemon_api.strip_lang_suffix(item.card_id)
+            item_lang = item.lang or detected_lang or "en"
 
             if item.card_id.startswith("custom-"):
                 effective_card_id = item.card_id

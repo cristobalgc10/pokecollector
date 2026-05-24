@@ -8,7 +8,12 @@ from database import get_db
 from models import Card, Set, PriceHistory, CustomCardMatch, CollectionItem, WishlistItem, BinderCard, Setting, User, ImageCache
 from schemas import CardBase, CardWithSet, PriceHistoryResponse, CardCustomCreate, CustomCardUpdate, CardCustomImageUpdate
 from services import pokemon_api
-from services.card_fallbacks import apply_cross_language_fallbacks
+from services.card_fallbacks import (
+    apply_cross_language_fallbacks,
+    build_missing_language_card,
+    clone_card_for_missing_language,
+    other_supported_lang,
+)
 from services.image_url_security import validate_public_https_image_url
 import datetime
 import re
@@ -168,7 +173,9 @@ def _search_by_code_number(
                 stripped_filters.append(Card.lang == lang)
             cards = db.query(Card).filter(*stripped_filters).all()
 
-    # 3. Card not in DB — fetch from TCGdex and cache
+    # 3. Card not in DB — fetch from TCGdex and cache. If the requested
+    # language has only set metadata but no cards yet, create target-language
+    # fallback rows from the sibling language so exact add/search still works.
     if not cards:
         for set_obj in set_objs:
             tcg_set_id = set_obj.tcg_set_id or set_obj.id
@@ -187,7 +194,33 @@ def _search_by_code_number(
                         db.add(Card(**parsed))
                 db.commit()
             except Exception:
-                pass
+                db.rollback()
+
+            if db.query(Card).filter(Card.set_id == tcg_set_id, Card.lang == set_lang).count() == 0:
+                fallback_lang = other_supported_lang(set_lang)
+                if fallback_lang:
+                    try:
+                        fallback_data = pokemon_api.get_set_cards(tcg_set_id, lang=fallback_lang)
+                        for card_data in fallback_data.get("cards", []):
+                            parsed = clone_card_for_missing_language(
+                                db,
+                                card_data,
+                                target_lang=set_lang,
+                                source_lang=fallback_lang,
+                                default_set_id=tcg_set_id,
+                            )
+                            if not parsed:
+                                continue
+                            existing = db.query(Card).filter(Card.id == parsed["id"]).first()
+                            if existing:
+                                for key, value in parsed.items():
+                                    if key != "id":
+                                        setattr(existing, key, value)
+                            else:
+                                db.add(Card(**parsed))
+                        db.commit()
+                    except Exception:
+                        db.rollback()
 
         lang_filters = [Card.set_id.in_(tcg_set_ids), Card.number == card_number]
         if lang != "all":
@@ -787,27 +820,26 @@ def get_card(
     # Fetch full card detail from TCGdex (includes pricing)
     # strip_lang_suffix handles both composite IDs (sv1-1_de) and legacy IDs (sv1-1)
     tcg_card_id, detected_lang = pokemon_api.strip_lang_suffix(card_id)
-    card_lang = lang or detected_lang
+    # An explicit suffix in the DB id wins over the query default. Requesting
+    # me04-001_de should create/return a German row, even if it temporarily uses
+    # English fallback data.
+    card_lang = detected_lang if card_id.endswith(("_de", "_en")) else (lang or detected_lang)
     try:
         card_data = pokemon_api.get_card(tcg_card_id, lang=card_lang)
-        if not card_data:
-            # Try the other language as fallback
-            fallback = "de" if card_lang == "en" else "en"
-            card_data = pokemon_api.get_card(tcg_card_id, lang=fallback)
-            if card_data:
-                card_lang = fallback
-        if not card_data:
-            raise HTTPException(status_code=404, detail="Card not found")
-
-        parsed = pokemon_api.parse_card_for_db(card_data, lang=card_lang)
-        parsed = apply_cross_language_fallbacks(db, parsed)
+        if card_data:
+            parsed = pokemon_api.parse_card_for_db(card_data, lang=card_lang)
+            parsed = apply_cross_language_fallbacks(db, parsed)
+        else:
+            parsed = build_missing_language_card(db, tcg_card_id, card_lang)
+            if not parsed:
+                raise HTTPException(status_code=404, detail="Card not found")
 
         # Ensure set exists
         if parsed.get("set_id"):
             set_obj = db.query(Set).filter(Set.id == parsed["set_id"]).first()
             if not set_obj:
                 # Create minimal set record
-                set_data = card_data.get("set") or {}
+                set_data = card_data.get("set") if card_data else None
                 if set_data:
                     set_parsed = pokemon_api.parse_set_for_db(set_data)
                     db.add(Set(**set_parsed))
