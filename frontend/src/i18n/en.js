@@ -872,6 +872,9 @@ const en = {
     marketPrice: 'Market price',
     addToWishlist: 'Add to wishlist',
     done: 'Done',
+    importCsv: 'Import CSV',
+    exportCsv: 'Export CSV',
+    csvFormatHint: 'CSV import uses: set_code,number,required_quantity,lang',
   },
   // Leaderboard
   leaderboard: {

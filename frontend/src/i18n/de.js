@@ -872,6 +872,9 @@ const de = {
     marketPrice: 'Marktpreis',
     addToWishlist: 'Zur Wunschliste hinzufügen',
     done: 'Fertig',
+    importCsv: 'CSV importieren',
+    exportCsv: 'CSV exportieren',
+    csvFormatHint: 'CSV-Import nutzt: set_code,number,required_quantity,lang',
   },
 
   // Navigation (social)

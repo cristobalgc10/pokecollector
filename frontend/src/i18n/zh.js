@@ -868,6 +868,9 @@ const zh = {
     marketPrice: '市场价',
     addToWishlist: '添加到愿望清单',
     done: '完成',
+    importCsv: '导入 CSV',
+    exportCsv: '导出 CSV',
+    csvFormatHint: 'CSV 导入格式：set_code,number,required_quantity,lang',
   },
 
   // Leaderboard

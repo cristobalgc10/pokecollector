@@ -234,11 +234,11 @@ export default function BinderDetail() {
           </button>
           {isWishlist && (
             <button onClick={() => fileInputRef.current?.click()} className="btn-ghost flex-shrink-0" disabled={importMutation.isPending}>
-              <Upload size={16} /> CSV
+              <Upload size={16} /> {t('binderTypes.importCsv')}
             </button>
           )}
           <button onClick={() => exportMutation.mutate()} className="btn-ghost flex-shrink-0" disabled={exportMutation.isPending || cards.length === 0}>
-            <Download size={16} /> CSV
+            <Download size={16} /> {t('binderTypes.exportCsv')}
           </button>
           <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         </div>
@@ -256,6 +256,7 @@ export default function BinderDetail() {
           <div>
             <p className="text-sm font-medium text-text-primary">{t('binderTypes.deckStyleBinder')}</p>
             <p className="text-xs text-text-muted">{t('binderTypes.formatMetadataHelp')}</p>
+            {isWishlist && <p className="text-xs text-text-muted mt-1">{t('binderTypes.csvFormatHint')}</p>}
           </div>
           {binder?.format && <span className="text-xs px-2 py-1 rounded-full bg-yellow/15 text-yellow font-semibold">{binder.format}</span>}
         </div>
