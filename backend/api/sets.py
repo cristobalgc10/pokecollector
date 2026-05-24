@@ -9,7 +9,12 @@ from database import get_db
 from models import Set, Card, CollectionItem, Setting, User
 from schemas import SetBase
 from services import pokemon_api
-from services.card_fallbacks import apply_cross_language_fallbacks
+from services.card_fallbacks import (
+    apply_cross_language_fallbacks,
+    build_missing_language_cards_for_set,
+    missing_language_fallback_enabled,
+)
+from services.card_upsert import upsert_card
 
 router = APIRouter()
 
@@ -180,7 +185,8 @@ def get_set_checklist(
     """Get set checklist - cards with ownership status.
 
     set_id is the composite DB key (e.g. 'sv1_de').
-    Cards are served exclusively from the local DB — no live API call.
+    Missing local cards are fetched from TCGdex and may use sibling-language
+    fallback rows until native language data exists.
     """
     set_obj = db.query(Set).filter(Set.id == set_id).first()
     if not set_obj:
@@ -189,50 +195,62 @@ def get_set_checklist(
     # Use the original TCGdex set ID for card lookups
     tcg_id = set_obj.tcg_set_id or set_obj.id
     set_lang = set_obj.lang or "en"
+    fallback_enabled = missing_language_fallback_enabled(db)
+
+    def query_set_cards():
+        query = db.query(Card).filter(
+            Card.set_id == tcg_id,
+            Card.lang == set_lang,
+        )
+        if not fallback_enabled:
+            query = query.filter(Card.data_source_lang.is_(None))
+        return query.all()
 
     # Query DB for cards matching both set_id and lang
-    cards = db.query(Card).filter(
-        Card.set_id == tcg_id,
-        Card.lang == set_lang,
-    ).all()
+    cards = query_set_cards()
 
-    # If no lang-filtered cards found, check if there are cards with NULL/wrong lang
-    # (pre-migration cards) and fix them
+    # If no lang-filtered cards are found, only repair legacy cards that do not
+    # already have an explicit language in their DB id. Do not relabel sibling
+    # rows like me04-001_en as German cards.
     if not cards:
-        existing_cards = db.query(Card).filter(
-            Card.set_id == tcg_id,
-        ).all()
-        if existing_cards:
-            # Update their lang to match this set
-            for c in existing_cards:
-                c.lang = set_lang
+        legacy_cards = db.query(Card).filter(Card.set_id == tcg_id).all()
+        repairable_cards = [
+            card for card in legacy_cards
+            if not (card.id or "").endswith(("_de", "_en"))
+        ]
+        if repairable_cards:
+            for card in repairable_cards:
+                card.lang = set_lang
             db.commit()
-            cards = existing_cards  # Use them directly
+            cards = repairable_cards
 
-    # If still no cards, fetch from TCGdex and cache them
+    # If still no cards, fetch native cards from TCGdex and cache them.
     if not cards:
         try:
             set_data = pokemon_api.get_set_cards(tcg_id, lang=set_lang)
             for card_data in set_data.get("cards", []):
                 parsed = pokemon_api.parse_card_for_db(card_data, default_set_id=tcg_id, lang=set_lang)
                 parsed = apply_cross_language_fallbacks(db, parsed)
-                existing = db.query(Card).filter(Card.id == parsed["id"]).first()
-                if existing:
-                    for key, value in parsed.items():
-                        if key != "id":
-                            setattr(existing, key, value)
-                else:
-                    db.add(Card(**parsed))
+                upsert_card(db, parsed)
             db.commit()
-            cards = db.query(Card).filter(
-                Card.set_id == tcg_id,
-                Card.lang == set_lang,
-            ).all()
+            cards = query_set_cards()
         except Exception:
-            # Last resort: return any cards for this set regardless of lang
-            cards = db.query(Card).filter(
-                Card.set_id == tcg_id,
-            ).all()
+            db.rollback()
+
+    # Some new sets exist as localized set metadata before localized card data
+    # exists. When cross-language fallback is enabled, fill any missing target
+    # rows from the sibling language. Do this even if one fallback row already
+    # exists, otherwise adding a single card prevents the rest of the set from
+    # appearing after fallback is turned on.
+    set_total = set_obj.total or 0
+    if fallback_enabled and (not cards or (set_total and len(cards) < set_total)):
+        try:
+            for parsed in build_missing_language_cards_for_set(db, tcg_id, set_lang, expected_total=set_total):
+                upsert_card(db, parsed)
+            db.commit()
+        except Exception:
+            db.rollback()
+        cards = query_set_cards()
 
     cards.sort(key=lambda card: _natural_card_number_key(card.number))
 
@@ -264,6 +282,7 @@ def get_set_checklist(
             "images_small": card.images_small,
             "images_large": card.images_large,
             "image_source_lang": getattr(card, "image_source_lang", None),
+            "data_source_lang": getattr(card, "data_source_lang", None),
             "price_source_lang": getattr(card, "price_source_lang", None),
             "owned": owned,
             "quantity": qty,

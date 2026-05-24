@@ -21,8 +21,10 @@ const en = {
 
   // Common / General
   fallback: {
+    data: 'Data',
     image: 'Image',
     price: 'Price',
+    dataFrom: 'Card data fallback from {lang}',
     imageFrom: 'Image fallback from {lang}',
     priceFrom: 'Price fallback from {lang}',
     customImage: 'Custom image',
@@ -520,7 +522,7 @@ const en = {
     telegramInfo: 'Configure Telegram notifications via environment variables in your .env file:',
     telegramNote: 'Notifications are sent when wishlist card prices cross your alert thresholds during sync. Maximum one notification per card per 23 hours.',
     about: 'About',
-    aboutDesc1: 'Pokemon TCG Collection Manager v1.13',
+    aboutDesc1: 'Pokemon TCG Collection Manager v1.15',
     aboutDesc2: 'Built with FastAPI + React + PostgreSQL',
     aboutDesc3: 'Data from',
     aboutDesc4: 'Prices from Cardmarket (EUR)',

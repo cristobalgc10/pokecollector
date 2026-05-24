@@ -37,6 +37,7 @@ class CardBase(BaseModel):
     images_small: Optional[str] = None
     images_large: Optional[str] = None
     image_source_lang: Optional[str] = None
+    data_source_lang: Optional[str] = None
     custom_image_url: Optional[str] = None
     is_custom: bool = False
     price_market: Optional[float] = None

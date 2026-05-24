@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from api.auth import get_current_user
@@ -7,7 +7,7 @@ from database import get_db
 from models import CollectionItem, Card, Set, User
 from schemas import CollectionItemCreate, CollectionItemUpdate, CollectionItemResponse, BulkCollectionAddRequest, BulkCollectionAddResponse
 from services import pokemon_api
-from services.card_fallbacks import apply_cross_language_fallbacks
+from services.card_fallbacks import apply_cross_language_fallbacks, build_missing_language_card
 from services.card_values import effective_market_price
 import datetime
 import csv
@@ -30,27 +30,47 @@ def _get_item_price(item):
     return effective_market_price(item.card, item.variant)
 
 
+def _ensure_set_exists_for_card(db: Session, parsed: dict, lang: str, card_data: Optional[dict] = None) -> None:
+    set_id = parsed.get("set_id")
+    if not set_id:
+        return
+
+    existing_set = db.query(Set).filter(
+        or_(Set.id == set_id, Set.id == f"{set_id}_{lang}", Set.tcg_set_id == set_id),
+        Set.lang == lang,
+    ).first()
+    if existing_set:
+        return
+
+    set_data = card_data.get("set") if card_data else None
+    if set_data:
+        set_parsed = pokemon_api.parse_set_for_db(set_data)
+        set_parsed["lang"] = set_data.get("_lang", lang)
+        if not set_parsed["id"].endswith(("_de", "_en")):
+            set_parsed["id"] = f"{set_id}_{lang}"
+        set_parsed["tcg_set_id"] = set_id
+        db.add(Set(**set_parsed))
+    else:
+        db.add(Set(id=f"{set_id}_{lang}", tcg_set_id=set_id, name=set_id, total=0, lang=lang))
+
+
 def ensure_card_exists(db: Session, card_id: str, lang: str = "en") -> Card:
     """Ensure card exists in DB. If not found locally, try to fetch from TCGdex."""
     card = db.query(Card).filter(Card.id == card_id).first()
     if not card:
         tcg_card_id, _ = pokemon_api.strip_lang_suffix(card_id)
         card_data = pokemon_api.get_card(tcg_card_id, lang=lang)
-        if not card_data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Card {card_id} not found in local database. Please run a Sync first."
-            )
-        parsed = pokemon_api.parse_card_for_db(card_data, lang=lang)
-        parsed = apply_cross_language_fallbacks(db, parsed)
-        if parsed.get("set_id"):
-            set_data = card_data.get("set", {})
-            if set_data:
-                set_parsed = pokemon_api.parse_set_for_db(set_data)
-                set_parsed["lang"] = set_data.get("_lang", lang)
-                existing_set = db.query(Set).filter(Set.id == set_parsed["id"]).first()
-                if not existing_set:
-                    db.add(Set(**set_parsed))
+        if card_data:
+            parsed = pokemon_api.parse_card_for_db(card_data, lang=lang)
+            parsed = apply_cross_language_fallbacks(db, parsed)
+        else:
+            parsed = build_missing_language_card(db, tcg_card_id, lang)
+            if not parsed:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Card {card_id} is not available locally, from TCGdex, or from a sibling-language fallback yet. Please try again after the source data is available or run Sync later."
+                )
+        _ensure_set_exists_for_card(db, parsed, lang, card_data)
         card = Card(**parsed)
         db.add(card)
         try:
@@ -62,14 +82,15 @@ def ensure_card_exists(db: Session, card_id: str, lang: str = "en") -> Card:
             if not card:
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Card {card_id} not found in local database. Please run a Sync first."
+                    detail=f"Card {card_id} is not available locally, from TCGdex, or from a sibling-language fallback yet. Please try again after the source data is available or run Sync later."
                 )
     return card
 
 
 def _add_collection_item(db: Session, current_user: User, item: CollectionItemCreate, commit: bool = True) -> str:
     """Add one item and return "added" or "updated"."""
-    item_lang = item.lang or "en"
+    _, detected_lang = pokemon_api.strip_lang_suffix(item.card_id)
+    item_lang = item.lang or detected_lang or "en"
 
     if item.card_id.startswith("custom-"):
         effective_card_id = item.card_id
@@ -306,7 +327,8 @@ def add_to_collection(
     db: Session = Depends(get_db),
 ):
     """Add a card to the collection. Cards with identical card_id+variant+lang+condition+purchase_price are grouped."""
-    item_lang = item.lang or "en"
+    _, detected_lang = pokemon_api.strip_lang_suffix(item.card_id)
+    item_lang = item.lang or detected_lang or "en"
 
     # Resolve the correct language-variant card_id
     if item.card_id.startswith("custom-"):
@@ -373,7 +395,8 @@ def bulk_add_to_collection(
 
     for item in request.items:
         try:
-            item_lang = item.lang or "en"
+            _, detected_lang = pokemon_api.strip_lang_suffix(item.card_id)
+            item_lang = item.lang or detected_lang or "en"
 
             if item.card_id.startswith("custom-"):
                 effective_card_id = item.card_id
