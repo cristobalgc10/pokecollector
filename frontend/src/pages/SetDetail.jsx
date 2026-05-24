@@ -400,6 +400,7 @@ export default function SetDetail() {
               card={card}
               className="absolute left-1 right-1 bottom-5 z-10 justify-center pointer-events-none"
               compact
+              variant="overlay"
             />
 
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
