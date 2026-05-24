@@ -51,6 +51,7 @@ def _card_to_dict(card: Card) -> dict:
         "images_small": card.images_small,
         "images_large": card.images_large,
         "image_source_lang": getattr(card, "image_source_lang", None),
+        "data_source_lang": getattr(card, "data_source_lang", None),
         "custom_image_url": getattr(card, "custom_image_url", None),
         "is_custom": card.is_custom or False,
         "lang": card.lang or "en",

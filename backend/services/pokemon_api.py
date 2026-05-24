@@ -360,6 +360,7 @@ def parse_card_for_db(card_data: Dict, default_set_id: Optional[str] = None, lan
         "images_small": f"{image}/low.webp" if image else None,
         "images_large": f"{image}/high.webp" if image else None,
         "image_source_lang": None,
+        "data_source_lang": None,
         "lang": card_lang,
         "variants_normal": variants.get("normal"),
         "variants_reverse": variants.get("reverse"),

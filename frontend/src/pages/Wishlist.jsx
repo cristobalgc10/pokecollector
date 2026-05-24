@@ -345,6 +345,7 @@ export default function Wishlist() {
                   if (item.price_alert_above) badges.push({ label: `↑ ${formatPrice(item.price_alert_above)}`, variant: 'yellow' })
                   if (item.price_alert_below) badges.push({ label: `↓ ${formatPrice(item.price_alert_below)}`, variant: 'blue' })
                   if (card?.rarity) badges.push({ label: card.rarity, variant: 'gray' })
+                  if (card?.data_source_lang) badges.push({ label: `${t('fallback.data')} ${card.data_source_lang.toUpperCase()}`, variant: 'purple' })
                   if (card?.price_source_lang) badges.push({ label: `${t('fallback.price')} ${card.price_source_lang.toUpperCase()}`, variant: 'yellow' })
                   if (card?.image_source_lang) badges.push({ label: `${t('fallback.image')} ${card.image_source_lang.toUpperCase()}`, variant: 'blue' })
 

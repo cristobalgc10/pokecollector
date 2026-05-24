@@ -6,10 +6,11 @@ const sourceLabel = (lang) => (lang ? lang.toUpperCase() : '')
 export default function FallbackBadges({ card, className = '', compact = false }) {
   const { t } = useSettings()
   if (!card) return null
+  const dataLang = card.data_source_lang
   const priceLang = card.price_source_lang
   const imageLang = card.image_source_lang
   const hasCustomImage = Boolean(card.custom_image_url) && !(card.images_small || card.images_large || card.images?.small || card.images?.large || card.image)
-  if (!priceLang && !imageLang && !hasCustomImage) return null
+  if (!dataLang && !priceLang && !imageLang && !hasCustomImage) return null
 
   const baseClass = compact
     ? 'text-[9px] px-1 py-0.5 rounded leading-none'
@@ -17,6 +18,14 @@ export default function FallbackBadges({ card, className = '', compact = false }
 
   return (
     <div className={clsx('flex flex-wrap gap-1', className)}>
+      {dataLang && (
+        <span
+          className={clsx(baseClass, 'font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30')}
+          title={t('fallback.dataFrom').replace('{lang}', sourceLabel(dataLang))}
+        >
+          {t('fallback.data')} {sourceLabel(dataLang)}
+        </span>
+      )}
       {priceLang && (
         <span
           className={clsx(baseClass, 'font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30')}

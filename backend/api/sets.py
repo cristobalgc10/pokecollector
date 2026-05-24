@@ -307,6 +307,7 @@ def get_set_checklist(
             "images_small": card.images_small,
             "images_large": card.images_large,
             "image_source_lang": getattr(card, "image_source_lang", None),
+            "data_source_lang": getattr(card, "data_source_lang", None),
             "price_source_lang": getattr(card, "price_source_lang", None),
             "owned": owned,
             "quantity": qty,

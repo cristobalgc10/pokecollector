@@ -8,8 +8,9 @@ admin setting allows it, and record the source language for visible UI tags.
 Some new sets appear in one language before the matching card endpoints exist
 in the other language. For those temporary gaps we can also create a card row in
 the requested language from the sibling language data. The row keeps the target
-DB id/lang (for example ``me04-001_de``), but marks borrowed images/prices so a
-later native sync can replace the fallback data in place.
+DB id/lang (for example ``me04-001_de``), but marks borrowed metadata,
+images, and prices so a later native sync can replace the fallback data in
+place.
 """
 
 from __future__ import annotations
@@ -168,6 +169,10 @@ def clone_card_for_missing_language(
         return None
 
     if isinstance(source, Card):
+        # Do not cascade metadata fallback. Missing-language rows should only be
+        # cloned from native sibling data, not from a row that was itself cloned.
+        if getattr(source, "data_source_lang", None):
+            return None
         parsed = _card_to_fallback_source(source)
         source_lang = source_lang or source.lang
     else:
@@ -195,6 +200,7 @@ def clone_card_for_missing_language(
 
     parsed["price_source_lang"] = None
     parsed["image_source_lang"] = None
+    parsed["data_source_lang"] = source_lang
 
     if price_enabled and _has_price(parsed):
         parsed["price_source_lang"] = source_lang
@@ -278,6 +284,7 @@ def apply_cross_language_fallbacks(
 
     parsed["price_source_lang"] = None
     parsed["image_source_lang"] = None
+    parsed["data_source_lang"] = None
 
     fallback_lang = _other_lang(lang)
     if not tcg_card_id or not fallback_lang or lang not in SUPPORTED_LANGS:

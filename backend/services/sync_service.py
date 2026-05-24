@@ -467,7 +467,11 @@ def perform_full_sync(db: Session) -> dict:
             has_fallback_cards = db.query(Card.id).filter(
                 Card.set_id == tcg_id,
                 Card.lang == set_lang,
-                or_(Card.image_source_lang.isnot(None), Card.price_source_lang.isnot(None)),
+                or_(
+                    Card.data_source_lang.isnot(None),
+                    Card.image_source_lang.isnot(None),
+                    Card.price_source_lang.isnot(None),
+                ),
             ).first() is not None
             set_total = set_obj.total or 0
             if existing_card_count >= set_total and existing_card_count > 0 and not has_fallback_cards:

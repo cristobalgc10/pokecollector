@@ -21,8 +21,10 @@ const de = {
 
   // Common / General
   fallback: {
+    data: 'Daten',
     image: 'Bild',
     price: 'Preis',
+    dataFrom: 'Kartendaten-Fallback aus {lang}',
     imageFrom: 'Bild-Fallback aus {lang}',
     priceFrom: 'Preis-Fallback aus {lang}',
     customImage: 'Eigenes Bild',

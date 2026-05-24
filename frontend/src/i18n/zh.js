@@ -21,8 +21,10 @@ const zh = {
 
   // Common / General
   fallback: {
+    data: '数据',
     image: '图片',
     price: '价格',
+    dataFrom: '卡牌数据回退来源：{lang}',
     imageFrom: '图片回退来源：{lang}',
     priceFrom: '价格回退来源：{lang}',
     customImage: '自定义图片',

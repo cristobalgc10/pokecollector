@@ -21,8 +21,10 @@ const en = {
 
   // Common / General
   fallback: {
+    data: 'Data',
     image: 'Image',
     price: 'Price',
+    dataFrom: 'Card data fallback from {lang}',
     imageFrom: 'Image fallback from {lang}',
     priceFrom: 'Price fallback from {lang}',
     customImage: 'Custom image',
