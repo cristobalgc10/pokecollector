@@ -885,6 +885,8 @@ const zh = {
     csvImportWishlistBehavior: '愿望活页夹使用 required_quantity 计算已拥有/缺失进度。',
     csvImportCollectionBehavior: '收藏活页夹会跳过未拥有的卡牌，并添加第一个匹配的已拥有版本。',
     csvImportErrorBehavior: '无效卡牌代码的行会被报告并跳过。不会自动解析外部牌表格式。',
+    alreadyUsed: '已使用',
+    collectionQuantityLocked: '收藏活页夹数量由已拥有的收藏条目决定。',
   },
 
   // Leaderboard

@@ -889,6 +889,8 @@ const en = {
     csvImportWishlistBehavior: 'Wishlist binders use required_quantity for owned/missing progress.',
     csvImportCollectionBehavior: 'Collection binders skip cards you do not own and add the first matching owned version.',
     csvImportErrorBehavior: 'Rows with invalid card codes are reported and skipped. No external decklist formats are parsed automatically.',
+    alreadyUsed: 'Already used',
+    collectionQuantityLocked: 'Collection binder quantity is controlled by the owned collection item.',
   },
   // Leaderboard
   leaderboard: {

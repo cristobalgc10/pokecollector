@@ -262,6 +262,7 @@ export default function BinderDetail() {
   if (isLoading) return <div className="skeleton h-64 rounded-xl" />
 
   const cards = data?.cards || []
+  const unavailableCollectionItemIds = new Set(data?.unavailable_collection_item_ids || [])
   const ownedCount = data?.owned_count ?? cards.reduce((sum, c) => sum + Math.min(c.owned_quantity || 0, c.required_quantity || 1), 0)
   const totalCount = data?.total_required_count ?? data?.total_count ?? cards.length
   const missingCount = data?.missing_count ?? cards.reduce((sum, c) => sum + (c.missing_quantity || 0), 0)
@@ -328,7 +329,7 @@ export default function BinderDetail() {
             title={t('binderTypes.importCsv')}
             aria-label={t('binderTypes.importCsv')}
           >
-            <Upload size={16} />
+            <Upload size={16} /> CSV
           </button>
           <button
             onClick={() => exportMutation.mutate()}
@@ -337,7 +338,7 @@ export default function BinderDetail() {
             title={t('binderTypes.exportCsv')}
             aria-label={t('binderTypes.exportCsv')}
           >
-            <Download size={16} />
+            <Download size={16} /> CSV
           </button>
           <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         </div>
@@ -448,10 +449,11 @@ export default function BinderDetail() {
                     const card = item.card
                     if (!card) return null
                     const alreadyAdded = cards.some(c => c.collection_item_id === item.id)
+                    const unavailable = unavailableCollectionItemIds.has(item.id)
                     return (
                       <div key={`${card.id}-${item.id}`}
-                        className={`relative rounded-lg overflow-hidden cursor-pointer group ${alreadyAdded ? 'opacity-40' : ''}`}
-                        onClick={() => !alreadyAdded && addCollectionItemMutation.mutate(item.id)}
+                        className={`relative rounded-lg overflow-hidden cursor-pointer group ${alreadyAdded || unavailable ? 'opacity-40' : ''}`}
+                        onClick={() => !alreadyAdded && !unavailable && addCollectionItemMutation.mutate(item.id)}
                         title={`${card.name}${item.variant ? ` (${item.variant})` : ''} · ${item.quantity}x`}>
                         {resolveCardImageUrl(card) ? (
                           <img src={resolveCardImageUrl(card)} alt={card.name} className="w-full aspect-[2.5/3.5] object-cover" loading="lazy" />
@@ -466,7 +468,12 @@ export default function BinderDetail() {
                             {[item.variant || 'Normal', item.condition].filter(Boolean).join(' · ')}
                           </div>
                         )}
-                        {!alreadyAdded && (
+                        {unavailable && !alreadyAdded && (
+                          <div className="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-[10px] text-center px-1">
+                            {t('binderTypes.alreadyUsed')}
+                          </div>
+                        )}
+                        {!alreadyAdded && !unavailable && (
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                             <Plus size={20} className="text-white" />
                           </div>
@@ -591,14 +598,18 @@ export default function BinderDetail() {
                     <div className="rounded-lg bg-bg-card p-2"><p className="text-xs text-text-muted">{t('binderTypes.owned')}</p><p className="font-bold text-green">{selectedCard.owned_quantity || 0}</p></div>
                     <div className="rounded-lg bg-bg-card p-2"><p className="text-xs text-text-muted">{t('binderTypes.missing')}</p><p className="font-bold text-brand-red">{selectedCard.missing_quantity || 0}</p></div>
                   </div>
-                  <div>
-                    <p className="text-xs text-text-muted mb-1">{t('binderTypes.requiredInBinder')}</p>
-                    <div className="flex items-center gap-2">
-                      <button className="btn-ghost px-2" onClick={() => changeRequiredQuantity(selectedCard, -1)} disabled={updateEntryMutation.isPending || (selectedCard.required_quantity || 1) <= 1}><Minus size={14} /></button>
-                      <span className="text-lg font-bold text-text-primary min-w-8 text-center">{selectedCard.required_quantity || 1}</span>
-                      <button className="btn-ghost px-2" onClick={() => changeRequiredQuantity(selectedCard, 1)} disabled={updateEntryMutation.isPending}><Plus size={14} /></button>
+                  {isWishlist ? (
+                    <div>
+                      <p className="text-xs text-text-muted mb-1">{t('binderTypes.requiredInBinder')}</p>
+                      <div className="flex items-center gap-2">
+                        <button className="btn-ghost px-2" onClick={() => changeRequiredQuantity(selectedCard, -1)} disabled={updateEntryMutation.isPending || (selectedCard.required_quantity || 1) <= 1}><Minus size={14} /></button>
+                        <span className="text-lg font-bold text-text-primary min-w-8 text-center">{selectedCard.required_quantity || 1}</span>
+                        <button className="btn-ghost px-2" onClick={() => changeRequiredQuantity(selectedCard, 1)} disabled={updateEntryMutation.isPending}><Plus size={14} /></button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-xs text-text-muted">{t('binderTypes.collectionQuantityLocked')}</p>
+                  )}
                   {selectedCard.price_market && <p className="text-xs text-text-muted">{t('binderTypes.marketPrice')}: <span className="text-green font-semibold">€{selectedCard.price_market.toFixed(2)}</span></p>}
                   {(selectedCard.variant || selectedCard.condition) && <p className="text-xs text-text-muted">{[selectedCard.variant, selectedCard.condition].filter(Boolean).join(' · ')}</p>}
                 </div>

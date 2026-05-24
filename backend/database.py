@@ -204,6 +204,12 @@ def _run_migrations(conn):
         "ALTER TABLE binders ADD COLUMN IF NOT EXISTS format VARCHAR",
         "ALTER TABLE binder_cards ADD COLUMN IF NOT EXISTS required_quantity INTEGER DEFAULT 1",
         "UPDATE binder_cards SET required_quantity = 1 WHERE required_quantity IS NULL",
+        """UPDATE binder_cards
+           SET required_quantity = 1
+           FROM binders
+           WHERE binder_cards.binder_id = binders.id
+             AND binder_cards.collection_item_id IS NOT NULL
+             AND (binders.binder_type = 'collection' OR binders.binder_type IS NULL)""",
         "ALTER TABLE binder_cards DROP CONSTRAINT IF EXISTS uq_binder_card",
         """DO $$
         BEGIN

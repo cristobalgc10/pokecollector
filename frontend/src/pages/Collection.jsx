@@ -927,9 +927,9 @@ export default function Collection() {
             aria-label={t('collection.importCsv')}
             className="btn-ghost text-sm py-1.5 px-2"
           >
-            <Upload size={14} />
+            <Upload size={14} />CSV
           </button>
-          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5 px-2" title="CSV" aria-label="CSV"><Download size={14} /></button>
+          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5 px-2" title="CSV" aria-label="CSV"><Download size={14} />CSV</button>
           <button onClick={exportPDF} className="btn-ghost text-sm py-1.5"><Download size={14} />PDF</button>
         </div>
       </div>

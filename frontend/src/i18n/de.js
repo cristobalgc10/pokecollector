@@ -889,6 +889,8 @@ const de = {
     csvImportWishlistBehavior: 'Wunschbinder nutzen required_quantity für Besitz-/Fehlt-Fortschritt.',
     csvImportCollectionBehavior: 'Echte Binder überspringen Karten, die du nicht besitzt, und fügen die erste passende besessene Version hinzu.',
     csvImportErrorBehavior: 'Zeilen mit ungültigen Kartencodes werden gemeldet und übersprungen. Externe Decklistenformate werden nicht automatisch gelesen.',
+    alreadyUsed: 'Schon genutzt',
+    collectionQuantityLocked: 'Die Menge im echten Binder wird durch den besessenen Sammlungseintrag bestimmt.',
   },
 
   // Navigation (social)
