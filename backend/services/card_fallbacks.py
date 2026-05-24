@@ -184,8 +184,6 @@ def clone_card_for_missing_language(
         return None
 
     price_enabled, image_enabled = _fallback_settings(db, price_enabled, image_enabled)
-    if not (price_enabled or image_enabled):
-        return None
 
     tcg_card_id = parsed.get("tcg_card_id") or pokemon_api.strip_lang_suffix(parsed.get("id", ""))[0]
     if not tcg_card_id:

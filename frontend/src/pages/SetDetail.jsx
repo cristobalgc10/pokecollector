@@ -112,6 +112,7 @@ function SetCardActionModal({ card, setLang, onClose, onAdd, onQuantityChange, o
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-text-primary">{card.name}</h2>
               <p className="text-xs text-text-muted">#{card.number} · {setLang.toUpperCase()}</p>
+              <FallbackBadges card={card} className="mt-1" />
             </div>
             <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={18} /></button>
           </div>
@@ -395,9 +396,14 @@ export default function SetDetail() {
               </div>
             )}
 
+            <FallbackBadges
+              card={card}
+              className="absolute left-1 right-1 bottom-5 z-10 justify-center pointer-events-none"
+              compact
+            />
+
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
               <p className="text-white text-xs font-medium text-center px-1 line-clamp-2">{card.name}</p>
-              <FallbackBadges card={card} className="justify-center" compact />
               <button onClick={(e) => { e.stopPropagation(); setSelectedCard(card) }}
                 className="bg-brand-red text-white rounded-full p-1">
                 <Plus size={12} />
