@@ -68,7 +68,7 @@ function ForcePasswordChangeScreen() {
           />
         </div>
         <div>
-          <label className="text-xs text-text-secondary mb-1 block">Confirm Password</label>
+          <label className="text-xs text-text-secondary mb-1 block">{t('settings.users.confirmPassword')}</label>
           <input
             type="password"
             value={confirmPassword}
@@ -78,7 +78,7 @@ function ForcePasswordChangeScreen() {
           />
         </div>
         {!passwordsMatch && confirmPassword && (
-          <p className="text-sm text-brand-red">Passwords do not match</p>
+          <p className="text-sm text-brand-red">{t('settings.users.passwordsDoNotMatch')}</p>
         )}
         {forceChangeMutation.isError && (
           <p className="text-sm text-brand-red">

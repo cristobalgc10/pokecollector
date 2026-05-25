@@ -129,7 +129,7 @@ export default function Dashboard() {
               onClick={() => navigate('/collection')}
               className="text-xs text-brand-red font-semibold hover:text-brand-red/80 transition-opacity"
             >
-              Alle →
+              {t('home.viewAll')} →
             </button>
           </div>
           <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4">
@@ -222,7 +222,7 @@ export default function Dashboard() {
               <p className="text-lg font-black text-gold">{formatPrice(Number(totalValue))}</p>
             </div>
             <div>
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">P&amp;L</p>
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">{t('dashboard.pnl')}</p>
               <p className={`text-lg font-black flex items-center gap-1 ${pnl >= 0 ? 'text-green' : 'text-brand-red'}`}>
                 {pnl >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 {pnl >= 0 ? '+' : ''}{formatPrice(pnl)}

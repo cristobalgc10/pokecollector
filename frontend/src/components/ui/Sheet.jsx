@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { useSettings } from '../../contexts/SettingsContext'
 
 /**
  * Sheet — Bottom sheet that slides up from the bottom on mobile.
@@ -13,6 +14,8 @@ import { X } from 'lucide-react'
  *   className {string}  — extra classes for the panel
  */
 export default function Sheet({ isOpen, onClose, title, children, className = '' }) {
+  const { t } = useSettings()
+
   // Lock body scroll while sheet is open
   useEffect(() => {
     if (isOpen) {
@@ -59,7 +62,7 @@ export default function Sheet({ isOpen, onClose, title, children, className = ''
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
-              aria-label="Close"
+              aria-label={t('common.close')}
             >
               <X size={18} />
             </button>

@@ -132,7 +132,7 @@ function ScanAddModal({ match, defaultLang, onClose, onAdded }) {
               <label className="text-xs text-text-muted mb-1 block">{t('scanner.purchasePriceLabel')}</label>
               <input
                 type="number" step="0.01" min="0"
-                placeholder="z.B. 4.99"
+                placeholder={t('analytics.amountPlaceholder')}
                 value={purchasePrice}
                 onChange={e => setPurchasePrice(e.target.value)}
                 className="input"

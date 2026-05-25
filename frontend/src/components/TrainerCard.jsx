@@ -11,7 +11,7 @@ export default function TrainerCard({
   weeklyGain = 0,
   gainLoss = 0,
 }) {
-  const { formatPrice } = useSettings()
+  const { t, formatPrice } = useSettings()
   const completionPct = totalSets > 0 ? Math.round((collectedSets / totalSets) * 100) : 0
   const hpClass = completionPct >= 66 ? 'healthy' : completionPct >= 33 ? 'medium' : 'low'
 
@@ -23,9 +23,9 @@ export default function TrainerCard({
 
       {/* Header bar */}
       <div className="bg-brand-red px-4 py-2 flex items-center justify-between">
-        <span className="text-white text-xs font-black tracking-[0.2em] uppercase">Pokémon Trainer</span>
+        <span className="text-white text-xs font-black tracking-[0.2em] uppercase">{t('trainerCard.title')}</span>
         <span className="text-white/50 text-[10px] tracking-wider">
-          ID No. {String(totalCards).padStart(6, '0')}
+          {t('trainerCard.idNo')} {String(totalCards).padStart(6, '0')}
         </span>
       </div>
 
@@ -48,19 +48,19 @@ export default function TrainerCard({
             <p className="text-gold font-black text-xl leading-none tracking-wide mb-0.5 truncate">
               {trainerName.toUpperCase()}
             </p>
-            <p className="text-text-muted text-[10px] mb-3 tracking-wider uppercase">Trainer</p>
+            <p className="text-text-muted text-[10px] mb-3 tracking-wider uppercase">{t('trainerCard.trainer')}</p>
 
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
-                <span className="text-text-secondary">Karten</span>
+                <span className="text-text-secondary">{t('trainerCard.cards')}</span>
                 <span className="text-white font-bold">{Number(totalCards).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-text-secondary">Wert</span>
+                <span className="text-text-secondary">{t('trainerCard.value')}</span>
                 <span className="text-gold font-bold">{formatPrice(Number(totalValue))}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-text-secondary">Sets</span>
+                <span className="text-text-secondary">{t('trainerCard.sets')}</span>
                 <span className="text-white font-bold">{collectedSets}/{totalSets}</span>
               </div>
             </div>
@@ -70,7 +70,7 @@ export default function TrainerCard({
         {/* Collection HP bar */}
         <div className="mt-4">
           <div className="flex justify-between text-[10px] text-text-muted mb-1.5">
-            <span className="uppercase tracking-wider">Fortschritt</span>
+            <span className="uppercase tracking-wider">{t('trainerCard.progress')}</span>
             <span className="font-bold">{completionPct}%</span>
           </div>
           <div className="hp-bar-track">
@@ -83,15 +83,15 @@ export default function TrainerCard({
           <div className="flex gap-4 mt-3 pt-3 border-t border-white/5">
             {weeklyGain !== 0 && (
               <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider">Diese Woche</p>
+                <p className="text-[10px] text-text-muted uppercase tracking-wider">{t('trainerCard.thisWeek')}</p>
                 <p className={`text-sm font-bold ${weeklyGain > 0 ? 'text-green' : 'text-brand-red'}`}>
-                  {weeklyGain > 0 ? '+' : ''}{weeklyGain} Karten
+                  {weeklyGain > 0 ? '+' : ''}{weeklyGain} {t('trainerCard.cards')}
                 </p>
               </div>
             )}
             {gainLoss !== 0 && (
               <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider">P&amp;L</p>
+                <p className="text-[10px] text-text-muted uppercase tracking-wider">{t('dashboard.pnl')}</p>
                 <p className={`text-sm font-bold ${gainLoss >= 0 ? 'text-green' : 'text-brand-red'}`}>
                   {gainLoss >= 0 ? '+' : ''}{formatPrice(Number(gainLoss))}
                 </p>

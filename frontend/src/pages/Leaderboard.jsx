@@ -70,7 +70,7 @@ export default function Leaderboard() {
               <Trophy size={22} className="text-yellow" />
               {t('leaderboard.title')}
             </h1>
-            <p className="mt-1 text-sm text-text-secondary">{rows.length} trainers</p>
+            <p className="mt-1 text-sm text-text-secondary">{rows.length} {t('leaderboard.trainers')}</p>
           </div>
           <div className="w-full max-w-[220px]">
             <label className="mb-1 block text-xs text-text-muted">{t('leaderboard.sortBy')}</label>
@@ -91,9 +91,9 @@ export default function Leaderboard() {
           {[...Array(5)].map((_, index) => <div key={index} className="skeleton h-28 rounded-2xl" />)}
         </div>
       ) : error ? (
-        <div className="card text-sm text-brand-red">Failed to load leaderboard.</div>
+        <div className="card text-sm text-brand-red">{t('leaderboard.loadFailed')}</div>
       ) : rows.length === 0 ? (
-        <div className="card text-center py-16 text-text-muted">No trainers found.</div>
+        <div className="card text-center py-16 text-text-muted">{t('leaderboard.noTrainers')}</div>
       ) : (
         <div className="space-y-3">
           {rows.map((trainer, index) => {

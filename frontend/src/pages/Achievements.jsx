@@ -81,7 +81,7 @@ export default function Achievements() {
           {[...Array(6)].map((_, index) => <div key={index} className="skeleton h-48 rounded-2xl" />)}
         </div>
       ) : error ? (
-        <div className="card text-sm text-brand-red">Failed to load achievements.</div>
+        <div className="card text-sm text-brand-red">{t('achievements.loadFailed')}</div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {data.achievements.map((achievement) => {

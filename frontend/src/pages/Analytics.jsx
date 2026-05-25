@@ -111,7 +111,7 @@ function AddExpenseModal({ onClose, onSuccess }) {
                 step="0.01"
                 min="0.01"
                 required
-                placeholder="z.B. 4.99"
+                placeholder={t('analytics.amountPlaceholder')}
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 className="input"
@@ -136,7 +136,7 @@ function AddExpenseModal({ onClose, onSuccess }) {
               <label className="text-xs text-text-secondary mb-1 block font-medium">{t('analytics.descriptionOptional')}</label>
               <input
                 type="text"
-                placeholder="z.B. 10x Booster Scarlet & Violet"
+                placeholder={t('analytics.descriptionPlaceholder')}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 className="input"

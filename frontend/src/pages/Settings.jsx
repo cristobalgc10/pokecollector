@@ -939,21 +939,21 @@ export default function Settings() {
                   </div>
                 </SettingsRow>
               )}
-              <SettingsRow label="Image Cache leeren" description="Alle gecachten Kartenbilder löschen (nur Admin)">
+              <SettingsRow label={t('settings.clearImageCache')} description={t('settings.clearImageCacheDesc')}>
                 <button
                   onClick={async () => {
-                    if (!confirm('Bist du sicher? Alle gecachten Bilder werden gelöscht.')) return
+                    if (!confirm(t('settings.clearImageCacheConfirm'))) return
                     try {
                       await api.post('/backup/clear-image-cache')
-                      toast.success('Image cache cleared')
+                      toast.success(t('settings.clearImageCacheSuccess'))
                     } catch {
-                      toast.error('Failed to clear cache')
+                      toast.error(t('settings.clearImageCacheFailed'))
                     }
                   }}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity"
                   style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
                 >
-                  🗑️ Cache leeren
+                  🗑️ {t('settings.clearImageCache')}
                 </button>
               </SettingsRow>
               <SettingsRow label={t('settings.csvExport')} description={t('settings.csvExportDesc')}>
