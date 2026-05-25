@@ -313,9 +313,11 @@ export default function BinderDetail() {
   const totalCount = data?.total_required_count ?? data?.total_count ?? cards.length
   const missingCount = data?.missing_count ?? cards.reduce((sum, c) => sum + (c.missing_quantity || 0), 0)
   const binderValue = data?.binder_value ?? cards.reduce((sum, c) => sum + ((c.price_market || 0) * (isWishlist ? (c.required_quantity || 1) : (c.quantity || 0))), 0)
+  const currentValue = data?.current_value ?? cards.reduce((sum, c) => sum + ((c.price_market || 0) * (isWishlist ? Math.min(c.owned_quantity || 0, c.required_quantity || 1) : (c.quantity || 0))), 0)
   const costToComplete = data?.cost_to_complete ?? cards.reduce((sum, c) => sum + ((c.price_market || 0) * (c.missing_quantity || 0)), 0)
   const displayedValue = isWishlist ? costToComplete : binderValue
   const hasMissingPriceData = cards.length > 0 && displayedValue === 0 && (!isWishlist || missingCount > 0) && cards.some(c => !c.price_market || c.price_market <= 0)
+  const hasMissingCurrentValueData = isWishlist && ownedCount > 0 && currentValue === 0 && cards.some(c => (c.owned_quantity || 0) > 0 && (!c.price_market || c.price_market <= 0))
   const progressPct = totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0
   const binderSets = [...new Set(cards.map(c => c.set_name || c.set_id).filter(Boolean))].sort()
   const visibleCards = cards.filter(card => {
@@ -402,10 +404,18 @@ export default function BinderDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className={isWishlist ? "grid grid-cols-2 md:grid-cols-5 gap-2" : "grid grid-cols-2 md:grid-cols-4 gap-2"}>
         <div className="card p-3"><p className="text-xs text-text-muted">{t('binderTypes.required')}</p><p className="text-lg font-bold text-text-primary">{totalCount}</p></div>
         <div className="card p-3"><p className="text-xs text-text-muted">{t('binderTypes.owned')}</p><p className="text-lg font-bold text-green">{ownedCount}</p></div>
         <div className="card p-3"><p className="text-xs text-text-muted">{t('binderTypes.missing')}</p><p className="text-lg font-bold text-brand-red">{missingCount}</p></div>
+        {isWishlist && (
+          <div className="card p-3">
+            <p className="text-xs text-text-muted">{t('binderTypes.currentValue')}</p>
+            <p className={`text-lg font-bold ${hasMissingCurrentValueData ? 'text-text-muted' : 'text-yellow'}`}>
+              {hasMissingCurrentValueData ? t('binderTypes.noPriceData') : `€${currentValue.toFixed(2)}`}
+            </p>
+          </div>
+        )}
         <div className="card p-3">
           <p className="text-xs text-text-muted">{isWishlist ? t('binderTypes.costToComplete') : t('binderTypes.binderValue')}</p>
           <p className={`text-lg font-bold ${hasMissingPriceData ? 'text-text-muted' : 'text-yellow'}`}>

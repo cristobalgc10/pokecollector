@@ -878,6 +878,7 @@ const zh = {
     addAnyCard: '添加任意卡牌',
     required: '需要',
     binderValue: '活页夹价值',
+    currentValue: '当前价值',
     costToComplete: '补齐成本',
     deckStyleBinder: '牌组式活页夹',
     formatMetadataHelp: '赛制仅作为元数据，不验证合法性。',

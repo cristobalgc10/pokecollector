@@ -879,6 +879,7 @@ const en = {
     addAnyCard: 'Add any card',
     required: 'Required',
     binderValue: 'Binder value',
+    currentValue: 'Current value',
     costToComplete: 'Cost to complete',
     deckStyleBinder: 'Deck-style binder',
     formatMetadataHelp: 'Format is metadata only. Legality is not validated.',

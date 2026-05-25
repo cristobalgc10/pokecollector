@@ -327,6 +327,7 @@ def get_binder_cards(
     total_required_count = 0
     missing_count = 0
     binder_value = 0.0
+    current_value = 0.0
     cost_to_complete = 0.0
 
     for bc in binder_cards:
@@ -359,6 +360,7 @@ def get_binder_cards(
         owned_count += fulfilled_quantity
         missing_count += missing_quantity
         binder_value += price * (owned_quantity if binder_type == "collection" else required_quantity)
+        current_value += price * (owned_quantity if binder_type == "collection" else fulfilled_quantity)
         if binder_type == "wishlist":
             cost_to_complete += price * missing_quantity
 
@@ -405,6 +407,7 @@ def get_binder_cards(
         "total_required_count": total_required_count,
         "missing_count": missing_count,
         "binder_value": round(binder_value, 2),
+        "current_value": round(current_value, 2),
         "cost_to_complete": round(cost_to_complete, 2),
         "unavailable_collection_item_ids": unavailable_collection_item_ids,
     }

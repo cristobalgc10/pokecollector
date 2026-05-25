@@ -879,6 +879,7 @@ const de = {
     addAnyCard: 'Beliebige Karte hinzufügen',
     required: 'Benötigt',
     binderValue: 'Binderwert',
+    currentValue: 'Aktueller Wert',
     costToComplete: 'Kosten bis komplett',
     deckStyleBinder: 'Deck-artiger Binder',
     formatMetadataHelp: 'Format ist nur Metadaten. Legalität wird nicht geprüft.',
