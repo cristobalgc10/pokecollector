@@ -921,6 +921,7 @@ const de = {
     noPriceDataShort: 'Kein Preis',
     equivalentPrints: 'Gleichwertige Drucke',
     equivalentPrintsHelp: 'Gleiche spielbare Karte, zuerst eigene Exemplare und dann nach Preis sortiert.',
+    equivalentPrintsCollectionHelp: 'Gleiche spielbare Karte, nur aus Drucken, die bereits in deiner Sammlung sind.',
     noEquivalentPrints: 'Noch keine gleichwertigen Drucke gefunden.',
     currentPrint: 'Aktuell',
     switchPrint: 'Wechseln',

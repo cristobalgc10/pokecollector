@@ -140,6 +140,7 @@ export default function BinderDetail() {
   const binder = data?.binder
   const binderType = binder?.binder_type || 'collection'
   const isWishlist = binderType === 'wishlist'
+  const isCollection = binderType === 'collection'
 
   const { data: collectionData } = useQuery({
     queryKey: ['collection'],
@@ -288,13 +289,13 @@ export default function BinderDetail() {
   })
 
   const { data: equivalentPrintsData, isLoading: equivalentPrintsLoading } = useQuery({
-    queryKey: ['binder-entry-equivalents', binderId, selectedCard?.binder_card_id],
+    queryKey: ['binder-entry-equivalents', binderId, binderType, selectedCard?.binder_card_id],
     queryFn: () => getBinderEntryEquivalentPrints(parseInt(binderId), selectedCard.binder_card_id),
-    enabled: isWishlist && !!selectedCard?.binder_card_id,
+    enabled: (isWishlist || isCollection) && !!selectedCard?.binder_card_id,
   })
 
   const switchPrintMutation = useMutation({
-    mutationFn: ({ binderCardId, cardId }) => switchBinderEntryCard(parseInt(binderId), binderCardId, cardId),
+    mutationFn: ({ binderCardId, cardId, collectionItemId }) => switchBinderEntryCard(parseInt(binderId), binderCardId, cardId, collectionItemId),
     onSuccess: () => {
       toast.success(t('binderTypes.printSwitched') + ' ✓')
       queryClient.invalidateQueries({ queryKey: ['binder-cards', binderId] })
@@ -693,12 +694,12 @@ export default function BinderDetail() {
                 </div>
               </div>
 
-              {isWishlist && (
+              {(isWishlist || isCollection) && (
                 <div className="rounded-xl bg-bg-card/60 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-text-primary">{t('binderTypes.equivalentPrints')}</p>
-                      <p className="text-xs text-text-muted">{t('binderTypes.equivalentPrintsHelp')}</p>
+                      <p className="text-xs text-text-muted">{isCollection ? t('binderTypes.equivalentPrintsCollectionHelp') : t('binderTypes.equivalentPrintsHelp')}</p>
                     </div>
                     {equivalentPrintsLoading && <span className="text-xs text-text-muted">{t('common.loading')}</span>}
                   </div>
@@ -710,7 +711,7 @@ export default function BinderDetail() {
                   {(equivalentPrintsData?.equivalents || []).length > 0 && (
                     <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                       {equivalentPrintsData.equivalents.map((print) => (
-                        <div key={print.id} className={`flex items-center gap-3 rounded-lg border p-2 ${print.is_current ? 'border-yellow/40 bg-yellow/5' : 'border-border bg-bg/40'}`}>
+                        <div key={print.collection_item_id || print.id} className={`flex items-center gap-3 rounded-lg border p-2 ${print.is_current ? 'border-yellow/40 bg-yellow/5' : 'border-border bg-bg/40'}`}>
                           {resolveCardImageUrl(print) ? (
                             <img src={resolveCardImageUrl(print)} alt={print.name} className="w-10 aspect-[2.5/3.5] object-cover rounded" loading="lazy" />
                           ) : (
@@ -721,15 +722,18 @@ export default function BinderDetail() {
                             <div className="flex items-center gap-2 flex-wrap text-[11px] text-text-muted">
                               {print.rarity && <span>{print.rarity}</span>}
                               <span>{print.price_market > 0 ? `€${print.price_market.toFixed(2)}` : t('binderTypes.noPriceDataShort')}</span>
+                              {print.variant && <span>{print.variant}</span>}
+                              {print.condition && <span>{print.condition}</span>}
                               {print.owned && <span className="text-green font-semibold">{t('binderTypes.owned')} {print.owned_quantity}x</span>}
+                              {isCollection && !print.is_current && print.available_quantity === 0 && <span className="text-yellow font-semibold">{t('binderTypes.alreadyUsed')}</span>}
                               {print.is_current && <span className="text-yellow font-semibold">{t('binderTypes.currentPrint')}</span>}
                             </div>
                           </div>
                           <button
                             type="button"
                             className="btn-ghost px-2 py-1 text-xs flex-shrink-0"
-                            disabled={print.is_current || switchPrintMutation.isPending}
-                            onClick={() => switchPrintMutation.mutate({ binderCardId: selectedCard.binder_card_id, cardId: print.id })}
+                            disabled={print.is_current || switchPrintMutation.isPending || (isCollection && print.available_quantity === 0)}
+                            onClick={() => switchPrintMutation.mutate({ binderCardId: selectedCard.binder_card_id, cardId: print.id, collectionItemId: print.collection_item_id })}
                           >
                             {print.is_current ? t('binderTypes.currentPrint') : t('binderTypes.switchPrint')}
                           </button>

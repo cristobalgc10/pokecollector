@@ -146,9 +146,15 @@ def _cache_same_name_cards_for_equivalents(db: Session, source_card: Card) -> No
             db.rollback()
 
 
-def _binder_card_summary(card: Card, owned_quantity: int, is_current: bool = False) -> dict:
-    price = effective_market_price(card, None) or 0
-    return {
+def _binder_card_summary(
+    card: Card,
+    owned_quantity: int,
+    is_current: bool = False,
+    collection_item: CollectionItem | None = None,
+    available_quantity: int | None = None,
+) -> dict:
+    price = effective_market_price(card, collection_item.variant if collection_item else None) or 0
+    summary = {
         "id": card.id,
         "name": card.name,
         "set_id": card.set_id,
@@ -163,9 +169,17 @@ def _binder_card_summary(card: Card, owned_quantity: int, is_current: bool = Fal
         "price_low": card.price_low,
         "price_trend": card.price_trend,
         "owned_quantity": int(owned_quantity or 0),
+        "available_quantity": int(available_quantity) if available_quantity is not None else None,
         "owned": bool(owned_quantity),
         "is_current": is_current,
     }
+    if collection_item:
+        summary.update({
+            "collection_item_id": collection_item.id,
+            "variant": collection_item.variant,
+            "condition": collection_item.condition,
+        })
+    return summary
 
 
 @router.get("/", response_model=List[BinderResponse])
@@ -530,8 +544,7 @@ def get_binder_entry_equivalent_prints(
     ).first()
     if not binder:
         raise HTTPException(status_code=404, detail="Binder not found")
-    if (binder.binder_type or "collection") != "wishlist":
-        raise HTTPException(status_code=400, detail="Equivalent prints are available for wishlist binders")
+    binder_type = binder.binder_type or "collection"
 
     bc = db.query(BinderCard).options(joinedload(BinderCard.card)).filter(
         BinderCard.id == binder_card_id,
@@ -544,17 +557,56 @@ def get_binder_entry_equivalent_prints(
     if not source_card or not source_card.playable_fingerprint:
         return {"source_card_id": bc.card_id, "equivalents": [], "message": "No playable fingerprint available"}
 
-    _cache_same_name_cards_for_equivalents(db, source_card)
-    source_card = db.query(Card).filter(Card.id == source_card.id).first()
-    if not source_card or not source_card.playable_fingerprint:
-        return {"source_card_id": bc.card_id, "equivalents": [], "message": "No playable fingerprint available"}
-
     collection_quantities = dict(
         db.query(CollectionItem.card_id, func.coalesce(func.sum(CollectionItem.quantity), 0))
         .filter(CollectionItem.user_id == current_user.id)
         .group_by(CollectionItem.card_id)
         .all()
     )
+
+    if binder_type == "collection":
+        usage_counts = _collection_binder_usage_counts(db, current_user)
+        collection_items = db.query(CollectionItem).join(Card, Card.id == CollectionItem.card_id).options(
+            joinedload(CollectionItem.card).joinedload(Card.set_ref)
+        ).filter(
+            CollectionItem.user_id == current_user.id,
+            Card.name == source_card.name,
+            Card.lang == (source_card.lang or "en"),
+            Card.is_custom.is_(False),
+        ).all()
+
+        summaries = []
+        for item in collection_items:
+            card = _ensure_card_gameplay_data(db, item.card)
+            if not card or card.playable_fingerprint != source_card.playable_fingerprint:
+                continue
+            is_current = item.id == bc.collection_item_id
+            used_quantity = int(usage_counts.get(item.id, 0) or 0)
+            available_quantity = max(int(item.quantity or 0) - used_quantity, 0)
+            summaries.append(_binder_card_summary(
+                card,
+                owned_quantity=item.quantity or 0,
+                is_current=is_current,
+                collection_item=item,
+                available_quantity=available_quantity,
+            ))
+        summaries.sort(key=lambda item: (
+            not item["is_current"],
+            item.get("available_quantity", 0) <= 0,
+            item["price_market"] <= 0,
+            item["price_market"] if item["price_market"] > 0 else 999999,
+            item["set_name"] or item["set_id"] or "",
+            item["number"] or "",
+        ))
+        return {"source_card_id": bc.card_id, "scope": "collection", "equivalents": summaries}
+
+    if binder_type != "wishlist":
+        raise HTTPException(status_code=400, detail="Equivalent prints are available for collection and wishlist binders")
+
+    _cache_same_name_cards_for_equivalents(db, source_card)
+    source_card = db.query(Card).filter(Card.id == source_card.id).first()
+    if not source_card or not source_card.playable_fingerprint:
+        return {"source_card_id": bc.card_id, "equivalents": [], "message": "No playable fingerprint available"}
 
     candidates = db.query(Card).options(joinedload(Card.set_ref)).filter(
         Card.playable_fingerprint == source_card.playable_fingerprint,
@@ -578,7 +630,7 @@ def get_binder_entry_equivalent_prints(
         item["number"] or "",
     ))
 
-    return {"source_card_id": bc.card_id, "equivalents": summaries}
+    return {"source_card_id": bc.card_id, "scope": "wishlist", "equivalents": summaries}
 
 
 @router.put("/{binder_id}/entries/{binder_card_id}/card")
@@ -596,8 +648,9 @@ def switch_binder_entry_card(
     ).first()
     if not binder:
         raise HTTPException(status_code=404, detail="Binder not found")
-    if (binder.binder_type or "collection") != "wishlist":
-        raise HTTPException(status_code=400, detail="Equivalent print switching is available for wishlist binders")
+    binder_type = binder.binder_type or "collection"
+    if binder_type not in {"collection", "wishlist"}:
+        raise HTTPException(status_code=400, detail="Equivalent print switching is available for collection and wishlist binders")
 
     bc = db.query(BinderCard).options(joinedload(BinderCard.card)).filter(
         BinderCard.id == binder_card_id,
@@ -605,6 +658,49 @@ def switch_binder_entry_card(
     ).first()
     if not bc or not bc.card:
         raise HTTPException(status_code=404, detail="Binder entry not found")
+
+    if binder_type == "collection":
+        if not update.collection_item_id:
+            raise HTTPException(status_code=400, detail="Collection print switching requires a collection item")
+        target_item = db.query(CollectionItem).options(joinedload(CollectionItem.card)).filter(
+            CollectionItem.id == update.collection_item_id,
+            CollectionItem.user_id == current_user.id,
+        ).first()
+        if not target_item or not target_item.card:
+            raise HTTPException(status_code=404, detail="Collection item not found")
+        if update.card_id and update.card_id != target_item.card_id:
+            raise HTTPException(status_code=400, detail="Selected card does not match the collection item")
+
+        source_card = _ensure_card_gameplay_data(db, bc.card)
+        target_card = _ensure_card_gameplay_data(db, target_item.card)
+        if not source_card or not target_card or not source_card.playable_fingerprint or not target_card.playable_fingerprint:
+            raise HTTPException(status_code=400, detail="Playable card data is not available for this switch")
+        if source_card.playable_fingerprint != target_card.playable_fingerprint:
+            raise HTTPException(status_code=400, detail="Selected card is not a playable-equivalent print")
+        if target_item.id == bc.collection_item_id:
+            return {"message": "Binder entry already uses this print", "binder_card_id": bc.id, "merged": False}
+
+        existing = db.query(BinderCard).filter(
+            BinderCard.binder_id == binder_id,
+            BinderCard.collection_item_id == target_item.id,
+            BinderCard.id != bc.id,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Selected collection item is already in this binder")
+
+        owned_quantity = int(target_item.quantity or 0)
+        usage_count = _collection_binder_usage_counts(db, current_user).get(target_item.id, 0)
+        if owned_quantity < 1 or usage_count >= owned_quantity:
+            raise HTTPException(status_code=400, detail="All owned copies of this print are already used in collection binders")
+
+        bc.card_id = target_item.card_id
+        bc.collection_item_id = target_item.id
+        bc.required_quantity = 1
+        db.commit()
+        return {"message": "Binder entry switched", "binder_card_id": bc.id, "merged": False}
+
+    if not update.card_id:
+        raise HTTPException(status_code=400, detail="Card id is required")
 
     target_card = db.query(Card).filter(Card.id == update.card_id).first()
     if not target_card:

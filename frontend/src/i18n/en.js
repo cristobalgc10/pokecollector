@@ -921,6 +921,7 @@ const en = {
     noPriceDataShort: 'No price',
     equivalentPrints: 'Equivalent prints',
     equivalentPrintsHelp: 'Same playable card, sorted by owned copies first and then price.',
+    equivalentPrintsCollectionHelp: 'Same playable card, only from prints already in your collection.',
     noEquivalentPrints: 'No equivalent prints found yet.',
     currentPrint: 'Current',
     switchPrint: 'Switch',

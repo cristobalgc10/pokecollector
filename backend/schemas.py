@@ -225,7 +225,8 @@ class BinderCardUpdate(BaseModel):
 
 
 class BinderCardSwitch(BaseModel):
-    card_id: str
+    card_id: Optional[str] = None
+    collection_item_id: Optional[int] = None
 
 
 class BinderResponse(BaseModel):

@@ -920,6 +920,7 @@ const zh = {
     noPriceDataShort: '无价格',
     equivalentPrints: '等效版本',
     equivalentPrintsHelp: '相同可用卡牌，优先显示已拥有，其次按价格排序。',
+    equivalentPrintsCollectionHelp: '相同可用卡牌，仅显示你收藏中已有的版本。',
     noEquivalentPrints: '尚未找到等效版本。',
     currentPrint: '当前',
     switchPrint: '切换',
