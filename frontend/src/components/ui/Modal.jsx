@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import Sheet from './Sheet'
+import { useSettings } from '../../contexts/SettingsContext'
 
 /**
  * Modal — Centered overlay modal on desktop, Sheet on mobile.
@@ -24,6 +25,8 @@ export default function Modal({
   className = '',
   mobileSheet = true,
 }) {
+  const { t } = useSettings()
+
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return
@@ -70,6 +73,7 @@ export default function Modal({
             title={title}
             sizeClass={sizeClass}
             className={className}
+            closeLabel={t('common.close')}
           >
             {children}
           </DesktopModal>
@@ -86,13 +90,14 @@ export default function Modal({
       title={title}
       sizeClass={sizeClass}
       className={className}
+      closeLabel={t('common.close')}
     >
       {children}
     </DesktopModal>
   )
 }
 
-function DesktopModal({ isOpen, onClose, title, children, sizeClass, className = '' }) {
+function DesktopModal({ isOpen, onClose, title, children, sizeClass, className = '', closeLabel = 'Close' }) {
   if (!isOpen) return null
 
   return createPortal(
@@ -123,7 +128,7 @@ function DesktopModal({ isOpen, onClose, title, children, sizeClass, className =
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
-                aria-label="Close"
+                aria-label={closeLabel}
               >
                 <X size={18} />
               </button>

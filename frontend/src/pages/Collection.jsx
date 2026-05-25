@@ -895,14 +895,14 @@ export default function Collection() {
           <div className="flex items-center gap-0.5 bg-bg-elevated rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
-              title="Binder view"
+              title={t('collection.binderView')}
               className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-brand-red text-white' : 'text-text-muted hover:text-text-primary'}`}
             >
               <Grid2X2 size={15} />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              title="List view"
+              title={t('collection.listView')}
               className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-brand-red text-white' : 'text-text-muted hover:text-text-primary'}`}
             >
               <List size={15} />
@@ -924,11 +924,12 @@ export default function Collection() {
             onClick={() => setShowCsvImportModal(true)}
             disabled={csvImportMutation.isPending}
             title={t('collection.importCsvHint')}
-            className="btn-ghost text-sm py-1.5"
+            aria-label={t('collection.importCsv')}
+            className="btn-ghost text-sm py-1.5 px-2"
           >
-            <Upload size={14} /> {csvImportMutation.isPending ? t('collection.importingCsv') : t('collection.importCsv')}
+            <Upload size={14} />CSV
           </button>
-          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5"><Download size={14} />CSV</button>
+          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5 px-2" title="CSV" aria-label="CSV"><Download size={14} />CSV</button>
           <button onClick={exportPDF} className="btn-ghost text-sm py-1.5"><Download size={14} />PDF</button>
         </div>
       </div>
@@ -1188,7 +1189,7 @@ export default function Collection() {
                                     {card?.name}
                                   </p>
                                   {card?.is_custom && (
-                                    <span className="text-xs bg-yellow/20 text-yellow px-1 rounded" title="Manual">✏️</span>
+                                    <span className="text-xs bg-yellow/20 text-yellow px-1 rounded" title={t('migration.custom')}>✏️</span>
                                   )}
                                   {item.lang && (
                                     <span className={`text-[9px] font-black px-1 py-0.5 rounded leading-none ${

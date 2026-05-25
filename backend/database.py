@@ -185,6 +185,17 @@ def _run_migrations(conn):
         )""",
         "ALTER TABLE collection ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
         "ALTER TABLE wishlist ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE wishlist DROP CONSTRAINT IF EXISTS wishlist_card_id_key",
+        "ALTER TABLE wishlist DROP CONSTRAINT IF EXISTS uq_wishlist_card_id",
+        """DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'uq_wishlist_user_card'
+            ) THEN
+                ALTER TABLE wishlist ADD CONSTRAINT uq_wishlist_user_card UNIQUE (user_id, card_id);
+            END IF;
+        END$$""",
         "ALTER TABLE binders ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
         "ALTER TABLE product_purchases ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
         "ALTER TABLE portfolio_snapshots ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)",
@@ -201,6 +212,15 @@ def _run_migrations(conn):
         # v46: Binder icons and exact collection-item binder entries.
         "ALTER TABLE binders ADD COLUMN IF NOT EXISTS icon_pokemon_id INTEGER",
         "ALTER TABLE binder_cards ADD COLUMN IF NOT EXISTS collection_item_id INTEGER REFERENCES collection(id)",
+        "ALTER TABLE binders ADD COLUMN IF NOT EXISTS format VARCHAR",
+        "ALTER TABLE binder_cards ADD COLUMN IF NOT EXISTS required_quantity INTEGER DEFAULT 1",
+        "UPDATE binder_cards SET required_quantity = 1 WHERE required_quantity IS NULL",
+        """UPDATE binder_cards
+           SET required_quantity = 1
+           FROM binders
+           WHERE binder_cards.binder_id = binders.id
+             AND binder_cards.collection_item_id IS NOT NULL
+             AND (binders.binder_type = 'collection' OR binders.binder_type IS NULL)""",
         "ALTER TABLE binder_cards DROP CONSTRAINT IF EXISTS uq_binder_card",
         """DO $$
         BEGIN

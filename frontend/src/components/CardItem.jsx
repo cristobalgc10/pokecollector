@@ -218,7 +218,7 @@ export function CustomCardModal({ onClose, onCreated, sets: setsProp = [], autoA
                 <label className="text-xs text-text-secondary mb-1 block font-medium">
                   {t('common.name')} <span className="text-brand-red">*</span>
                 </label>
-                <input type="text" required placeholder="z.B. Glurak ex" value={name}
+                <input type="text" required placeholder={t('cardSearch.customNamePlaceholder')} value={name}
                   onChange={(e) => setName(e.target.value)} className="input" />
               </div>
               <div>
@@ -236,12 +236,12 @@ export function CustomCardModal({ onClose, onCreated, sets: setsProp = [], autoA
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-text-secondary mb-1 block">{t('cardSearch.cardNumber')}</label>
-                  <input type="text" placeholder="z.B. 025" value={number}
+                  <input type="text" placeholder={t('cardSearch.cardNumberPlaceholder')} value={number}
                     onChange={(e) => setNumber(e.target.value)} className="input" />
                 </div>
                 <div>
                   <label className="text-xs text-text-secondary mb-1 block">{t('common.rarity')}</label>
-                  <input type="text" placeholder="z.B. Rare Holo" value={rarity}
+                  <input type="text" placeholder={t('cardSearch.rarityPlaceholder')} value={rarity}
                     onChange={(e) => setRarity(e.target.value)} className="input" />
                 </div>
               </div>
@@ -264,12 +264,12 @@ export function CustomCardModal({ onClose, onCreated, sets: setsProp = [], autoA
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-text-secondary mb-1 block">{t('common.hp')}</label>
-                  <input type="text" placeholder="z.B. 200" value={hp}
+                  <input type="text" placeholder={t('cardSearch.hpPlaceholder')} value={hp}
                     onChange={(e) => setHp(e.target.value)} className="input" />
                 </div>
                 <div>
                   <label className="text-xs text-text-secondary mb-1 block">{t('common.artist')}</label>
-                  <input type="text" placeholder="z.B. Mitsuhiro Arita" value={artist}
+                  <input type="text" placeholder={t('cardSearch.artistPlaceholder')} value={artist}
                     onChange={(e) => setArtist(e.target.value)} className="input" />
                 </div>
               </div>
@@ -434,7 +434,7 @@ export const CardItem = memo(function CardItem({ card, showActions = true, onAdd
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-medium text-text-primary truncate">{cardName}</h3>
             {card.is_custom && (
-              <span className="flex-shrink-0 text-xs bg-yellow/20 text-yellow px-1 py-0.5 rounded" title="Manual">✏️</span>
+              <span className="flex-shrink-0 text-xs bg-yellow/20 text-yellow px-1 py-0.5 rounded" title={t('migration.custom')}>✏️</span>
             )}
             {lang && (
               <span className={clsx(
@@ -442,7 +442,7 @@ export const CardItem = memo(function CardItem({ card, showActions = true, onAdd
                 lang === 'de'
                   ? 'bg-yellow/20 text-yellow border border-yellow/30'
                   : 'bg-blue/20 text-blue-400 border border-blue-400/30'
-              )} title={lang === 'de' ? 'Deutsche Karte' : 'English card'}>
+              )} title={lang === 'de' ? t('lang.germanCard') : t('lang.englishCard')}>
                 {lang.toUpperCase()}
               </span>
             )}

@@ -122,7 +122,7 @@ export default function Compare() {
           {[...Array(3)].map((_, index) => <div key={index} className="skeleton h-48 rounded-2xl" />)}
         </div>
       ) : error ? (
-        <div className="card text-sm text-brand-red">Failed to load comparison.</div>
+        <div className="card text-sm text-brand-red">{t('compare.loadFailed')}</div>
       ) : (
         <>
           <div className="grid gap-4 lg:grid-cols-[1fr_320px_1fr]">

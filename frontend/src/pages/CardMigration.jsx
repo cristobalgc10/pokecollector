@@ -38,7 +38,7 @@ function CardPreview({ card, label }) {
         )}
         {card.rarity && <p className="text-xs text-text-muted truncate">{card.rarity}</p>}
         {card.is_custom && (
-          <span className="inline-block mt-1 text-xs bg-yellow/20 text-yellow px-1.5 py-0.5 rounded-full">Custom</span>
+          <span className="inline-block mt-1 text-xs bg-yellow/20 text-yellow px-1.5 py-0.5 rounded-full">{t('migration.custom')}</span>
         )}
       </div>
       <span className="text-xs text-text-muted font-medium uppercase tracking-wide">{label}</span>

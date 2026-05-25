@@ -4,7 +4,7 @@ import math
 from typing import Any, Mapping
 from sqlalchemy.orm import Session, load_only
 from sqlalchemy import func, or_
-from models import Card, Set, CollectionItem, WishlistItem, PriceHistory, SyncLog, PortfolioSnapshot, CustomCardMatch, Setting, ProductPurchase, User
+from models import Card, Set, CollectionItem, WishlistItem, BinderCard, PriceHistory, SyncLog, PortfolioSnapshot, CustomCardMatch, Setting, ProductPurchase, User
 from services import pokemon_api, telegram
 from services.card_fallbacks import PRICE_FIELDS, apply_cross_language_fallbacks, build_missing_language_cards_for_set
 from services.card_upsert import upsert_card
@@ -57,7 +57,8 @@ def _price_sync_collection_size(db: Session) -> int:
     """Return the tracked collection size used to scale the price sync cap."""
     collection_quantity = db.query(func.coalesce(func.sum(CollectionItem.quantity), 0)).scalar() or 0
     wishlist_count = db.query(func.count(WishlistItem.id)).scalar() or 0
-    return int(collection_quantity) + int(wishlist_count)
+    binder_card_count = db.query(func.count(BinderCard.id)).scalar() or 0
+    return int(collection_quantity) + int(wishlist_count) + int(binder_card_count)
 
 
 def _price_sync_limit(db: Session) -> int:
@@ -82,7 +83,7 @@ def _empty_price_sync_plan(sync_limit: int) -> dict:
 
 
 def _price_sync_plan(db: Session, *, now: datetime.datetime | None = None) -> dict:
-    """Return selected collection/wishlist card IDs with a fair price-sync split.
+    """Return selected collection/wishlist/binder card IDs with a fair price-sync split.
 
     The old implementation converted collection and wishlist IDs through a
     Python set and then sliced the first 500 entries. Set iteration order is not
@@ -105,8 +106,12 @@ def _price_sync_plan(db: Session, *, now: datetime.datetime | None = None) -> di
         WishlistItem.card_id,
         func.max(WishlistItem.created_at),
     ).group_by(WishlistItem.card_id).all()
+    binder_rows = db.query(
+        BinderCard.card_id,
+        func.max(BinderCard.added_at),
+    ).group_by(BinderCard.card_id).all()
 
-    for card_id, seen_at in [*collection_rows, *wishlist_rows]:
+    for card_id, seen_at in [*collection_rows, *wishlist_rows, *binder_rows]:
         if not card_id:
             continue
         normalized_seen_at = _as_utc_naive(seen_at)
@@ -156,7 +161,7 @@ def _price_sync_plan(db: Session, *, now: datetime.datetime | None = None) -> di
         last_attempt = _as_utc_naive(card.last_price_sync_attempt_at)
         activity = latest_activity.get(card.id) or datetime.datetime.min
         # Never-attempted and oldest-attempted missing-price cards first. If
-        # that ties, prefer recently added collection/wishlist cards so new
+        # that ties, prefer recently added collection/wishlist/binder cards so new
         # no-price reports are picked up.
         return (
             last_attempt,
@@ -504,14 +509,14 @@ def perform_full_sync(db: Session) -> dict:
                     db.rollback()
         logger.info("Full card catalogue sync complete")
 
-        # 3. Update prices for collection + wishlist cards. Use the same
+        # 3. Update prices for collection, wishlist, and binder cards. Use the same
         # fair dynamic priority queue as the price-only sync so a full sync
         # cannot keep skipping cards when the per-run cap applies.
         price_plan = _price_sync_plan(db)
         selected_ids = price_plan["ids"]
         skipped_count = price_plan["deferred"]
         logger.info(
-            "Full sync: updating prices for %s of %s collection/wishlist cards "
+            "Full sync: updating prices for %s of %s collection/wishlist/binder cards "
             "(limit=%s, missing=%s/%s, priced=%s/%s, cooldown_no_price=%s)%s...",
             len(selected_ids),
             price_plan["total_syncable"],
@@ -623,7 +628,7 @@ def perform_full_sync(db: Session) -> dict:
 
 
 def perform_price_sync(db: Session) -> dict:
-    """Perform a price-only sync: update prices for collection + wishlist cards."""
+    """Perform a price-only sync: update prices for collection, wishlist, and binder cards."""
     log = SyncLog(started_at=datetime.datetime.utcnow(), status="running", sync_type="price")
     db.add(log)
     db.commit()
@@ -636,7 +641,7 @@ def perform_price_sync(db: Session) -> dict:
         selected_ids = price_plan["ids"]
         skipped_count = price_plan["deferred"]
         logger.info(
-            "Price sync: updating prices for %s of %s collection/wishlist cards "
+            "Price sync: updating prices for %s of %s collection/wishlist/binder cards "
             "(limit=%s, missing=%s/%s, priced=%s/%s, cooldown_no_price=%s)%s...",
             len(selected_ids),
             price_plan["total_syncable"],
