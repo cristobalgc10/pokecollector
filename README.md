@@ -304,13 +304,17 @@ All settings are persisted in the database and edited in the Settings UI.
 
 ## 🔄 Updating
 
-PokéCollector creates an automatic SQL backup before startup migrations when an existing install starts on a new app version. These backups are stored in the mounted backups folder:
+PokéCollector creates an automatic SQL backup before startup migrations when an existing install starts on a new app version. This safety backup is there in case something goes wrong during an update or a migration breaks after a version change.
+
+Automatic backups are stored in the mounted backups folder:
 
 ```text
 ./backups/pre_upgrade_<old-version>_to_<new-version>_<timestamp>.sql
 ```
 
-By default, startup stops if this safety backup fails. This protects existing card collections before version migrations run. You can still create an extra manual backup before updating:
+By default, startup stops if this safety backup fails. This protects existing card collections before version migrations run.
+
+> **Important:** Always create your own manual backup before updating the application. The automatic pre-upgrade backup is an extra safety net, not a replacement for a verified backup you control.
 
 ```bash
 docker compose exec postgres pg_dump -U pokemon pokemon_tcg > backup_$(date +%Y%m%d).sql
