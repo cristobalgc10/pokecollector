@@ -229,6 +229,10 @@ class BinderCardSwitch(BaseModel):
     collection_item_id: Optional[int] = None
 
 
+class BinderPrintOptimizationApply(BaseModel):
+    selected_binder_card_ids: Optional[List[int]] = None
+
+
 class BinderResponse(BaseModel):
     id: int
     name: str

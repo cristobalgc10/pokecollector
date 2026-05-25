@@ -934,6 +934,8 @@ const zh = {
     optimizingPrints: '正在优化版本...',
     noPrintOptimizations: '未找到更便宜的等效版本。',
     optimizePrintsSummary: '建议更改 / 预计节省',
+    selectedOptimizationSummary: '已选择更改 / 预计节省',
+    selectAllOptimizations: '选择全部建议更改',
     estimatedSavings: '预计节省',
     applyOptimization: '应用优化',
     optimizePrintsApplied: '版本优化已应用',

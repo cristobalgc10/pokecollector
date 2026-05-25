@@ -935,6 +935,8 @@ const de = {
     optimizingPrints: 'Drucke werden optimiert...',
     noPrintOptimizations: 'Keine günstigeren gleichwertigen Drucke gefunden.',
     optimizePrintsSummary: 'Vorgeschlagene Änderungen / geschätzte Ersparnis',
+    selectedOptimizationSummary: 'Ausgewählte Änderungen / geschätzte Ersparnis',
+    selectAllOptimizations: 'Alle vorgeschlagenen Änderungen auswählen',
     estimatedSavings: 'Geschätzte Ersparnis',
     applyOptimization: 'Optimierung anwenden',
     optimizePrintsApplied: 'Druckoptimierung angewendet',

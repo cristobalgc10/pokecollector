@@ -935,6 +935,8 @@ const en = {
     optimizingPrints: 'Optimizing prints...',
     noPrintOptimizations: 'No cheaper equivalent prints found.',
     optimizePrintsSummary: 'Suggested changes / estimated savings',
+    selectedOptimizationSummary: 'Selected changes / estimated savings',
+    selectAllOptimizations: 'Select all suggested changes',
     estimatedSavings: 'Estimated savings',
     applyOptimization: 'Apply optimization',
     optimizePrintsApplied: 'Print optimization applied',
