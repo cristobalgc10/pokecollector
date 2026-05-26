@@ -16,9 +16,9 @@ Be kind. Be clear. Assume good intent. Keep feedback constructive.
 
 🌐 **Website:** [pokecollector.romerg.de](https://pokecollector.romerg.de/)
 
-![Version](https://img.shields.io/badge/version-v1.19.2-e3000b?style=flat-square) ![Dark Theme](https://img.shields.io/badge/theme-dark-1a1a2e?style=flat-square) ![TCGdex](https://img.shields.io/badge/card%20data-TCGdex-e3000b?style=flat-square) ![Docker](https://img.shields.io/badge/deploy-Docker-2496ed?style=flat-square) ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?style=flat-square) ![React](https://img.shields.io/badge/frontend-React%2018-61dafb?style=flat-square) [![Ko-fi](https://img.shields.io/badge/support-Ko--fi-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/gillesromer)
+![Version](https://img.shields.io/badge/version-v1.20.0-e3000b?style=flat-square) ![Dark Theme](https://img.shields.io/badge/theme-dark-1a1a2e?style=flat-square) ![TCGdex](https://img.shields.io/badge/card%20data-TCGdex-e3000b?style=flat-square) ![Docker](https://img.shields.io/badge/deploy-Docker-2496ed?style=flat-square) ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?style=flat-square) ![React](https://img.shields.io/badge/frontend-React%2018-61dafb?style=flat-square) [![Ko-fi](https://img.shields.io/badge/support-Ko--fi-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/gillesromer)
 
-**Current version:** `v1.19.2` · Releases are tracked on the [GitHub Releases page](https://github.com/Git-Romer/pokecollector/releases).
+**Current version:** `v1.20.0` · Releases are tracked on the [GitHub Releases page](https://github.com/Git-Romer/pokecollector/releases).
 
 ![WebApp Preview](preview-homescreen.png)
 
@@ -269,7 +269,7 @@ The old nested `pokemon-tcg-collection/` layout is no longer used.
 |-------|-----------|
 | Frontend | React 18, Vite, Tailwind CSS, TanStack Query |
 | Backend | Python 3.11, FastAPI, SQLAlchemy, APScheduler, Pydantic |
-| Database | PostgreSQL 15 |
+| Database | PostgreSQL 18 |
 | Card Data | [TCGdex](https://tcgdex.dev/) |
 | AI Scanner | Google Gemini 2.5 Flash |
 | Deploy | Docker + Docker Compose |
@@ -303,6 +303,29 @@ All settings are persisted in the database and edited in the Settings UI.
 ---
 
 ## 🔄 Updating
+
+### PostgreSQL 18 upgrade
+
+PokéCollector now uses PostgreSQL 18 for Docker installs. Existing Docker installs that still have a PostgreSQL 15 data volume must run the one-time upgrade script before recreating the database container with PostgreSQL 18. PostgreSQL cannot upgrade a major-version data directory just by changing the Docker image.
+
+Create or verify a manual backup first while your current PostgreSQL 15 stack is still running:
+
+```bash
+docker compose exec postgres pg_dump -U pokemon pokemon_tcg > backup_$(date +%Y%m%d).sql
+```
+
+Then pull the updated project files, but do not run the normal `docker compose up -d --build` command yet:
+
+```bash
+git pull
+./scripts/upgrade-postgres-15-to-18.sh
+```
+
+The script stops the app services to prevent writes during the dump, creates a SQL dump from the still-running PostgreSQL 15 container, keeps a rollback copy of the old PostgreSQL 15 Docker volume, initializes a fresh PostgreSQL 18 volume using the PostgreSQL 18 Docker image layout, restores the dump, and rebuilds/starts the stack again. It asks for confirmation before changing volumes.
+
+Fresh installs do not need this step. Existing installs only use the normal app update command below after this one-time PostgreSQL upgrade has completed.
+
+### App updates
 
 PokéCollector creates an automatic SQL backup before startup migrations when an existing install starts on a new app version. This safety backup is there in case something goes wrong during an update or a migration breaks after a version change.
 
