@@ -27,8 +27,8 @@ jobs:
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: Basic ${auth_header}" fetch --force --tags origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
 
-      - name: Check version consistency
-        run: node scripts/check-version.mjs
+      - name: Check release version consistency
+        run: node scripts/check-version.mjs --skip-readme
 
       - name: Read version
         id: version

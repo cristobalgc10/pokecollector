@@ -15,6 +15,7 @@ import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 import { useTilt } from '../hooks/useTilt'
 import { resolveCardImageUrl } from '../utils/imageUrl'
+import { collectionItemTargetUrl } from '../utils/navigation'
 import CardImage from '../components/CardImage'
 
 // Compact number formatter for mobile (1.2k, 3.4M, etc.)
@@ -117,6 +118,8 @@ export default function HomeScreen() {
 
   const recentCards = data?.recent_additions?.slice(0, 12) ?? []
   const topCards = data?.top_cards?.slice(0, 8) ?? []
+
+  const openCollectionItem = (card) => navigate(collectionItemTargetUrl(card))
 
   // Map chart data — backend already filters and downsamples
   const chartData = useMemo(() => {
@@ -424,7 +427,7 @@ export default function HomeScreen() {
             </div>
             <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar -mx-4 px-4">
               {recentCards.map(card => (
-                <CardThumb key={card.id} card={card} onClick={() => navigate('/collection')} />
+                <CardThumb key={card.id} card={card} onClick={() => openCollectionItem(card)} />
               ))}
             </div>
           </div>
@@ -441,8 +444,8 @@ export default function HomeScreen() {
             </div>
             <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar -mx-4 px-4">
               {topCards.map((card, i) => (
-                <div key={card.id} className="flex-shrink-0 w-[110px] cursor-pointer group"
-                  onClick={() => navigate('/collection')}>
+                <div key={card.collection_item_id || card.id} className="flex-shrink-0 w-[110px] cursor-pointer group"
+                  onClick={() => openCollectionItem(card)}>
                   <div className="relative">
                     <div className="aspect-[2.5/3.5] rounded-xl overflow-hidden shadow-lg transition-all duration-150
                       group-hover:scale-[1.03]"

@@ -1,4 +1,5 @@
-import { useState, useMemo, useId, useRef } from 'react'
+import { useState, useMemo, useId, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Check, X, Filter, SortAsc, Download, Upload, ChevronUp, ChevronDown, Search, PenLine, Grid2X2, List, Library, BookOpen, Heart, Copy, ArrowLeft } from 'lucide-react'
@@ -723,6 +724,7 @@ export default function Collection() {
   const [showCsvImportModal, setShowCsvImportModal] = useState(false)
   const csvImportInputRef = useRef(null)
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const { data: items = [], isLoading, error } = useQuery({
     queryKey: ['collection'],
@@ -735,6 +737,36 @@ export default function Collection() {
     queryFn: () => getSets().then(r => r.data),
     staleTime: 5 * 60 * 1000,
   })
+
+  const targetItemId = searchParams.get('itemId')
+  const targetCardId = searchParams.get('cardId')
+
+  const clearTargetParams = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('itemId')
+    next.delete('cardId')
+    setSearchParams(next, { replace: true })
+  }
+
+  useEffect(() => {
+    if (isLoading || editingCollectionItem || (!targetItemId && !targetCardId)) return
+
+    const targetItem = items.find(item => {
+      if (targetItemId && String(item.id) === targetItemId) return true
+      if (!targetItemId && targetCardId) {
+        return item.card_id === targetCardId || item.card?.id === targetCardId || item.card?.tcg_card_id === targetCardId
+      }
+      return false
+    })
+
+    if (targetItem) setEditingCollectionItem(targetItem)
+    else clearTargetParams()
+  }, [isLoading, items, editingCollectionItem, targetItemId, targetCardId])
+
+  const closeCollectionItemModal = () => {
+    setEditingCollectionItem(null)
+    if (targetItemId || targetCardId) clearTargetParams()
+  }
 
   const csvImportMutation = useMutation({
     mutationFn: (file) => importCollectionCsv(file),
@@ -1315,12 +1347,7 @@ export default function Collection() {
       {editingCollectionItem && (
         <CollectionEditModal
           item={editingCollectionItem}
-          onClose={() => {
-            setEditingCollectionItem(null)
-            if (editingCollectionItem.card?.is_custom) {
-              // If custom card, also allow editing the card itself
-            }
-          }}
+          onClose={closeCollectionItemModal}
         />
       )}
 

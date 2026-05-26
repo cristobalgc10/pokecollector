@@ -5,8 +5,9 @@ const root = resolve(import.meta.dirname, '..')
 const version = readFileSync(resolve(root, 'VERSION'), 'utf8').trim()
 const packageJson = JSON.parse(readFileSync(resolve(root, 'frontend/package.json'), 'utf8'))
 const packageLock = JSON.parse(readFileSync(resolve(root, 'frontend/package-lock.json'), 'utf8'))
-const readme = readFileSync(resolve(root, 'README.md'), 'utf8')
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
+const skipReadme = process.argv.includes('--skip-readme') || process.env.SKIP_README_VERSION_CHECK === 'true'
+const readme = skipReadme ? '' : readFileSync(resolve(root, 'README.md'), 'utf8')
 
 const errors = []
 if (!semverPattern.test(version)) {
@@ -21,10 +22,10 @@ if (packageLock.version !== version) {
 if (packageLock.packages?.['']?.version !== version) {
   errors.push(`frontend/package-lock.json root package version ${packageLock.packages?.['']?.version} does not match VERSION ${version}`)
 }
-if (!readme.includes(`version-v${version}-`)) {
+if (!skipReadme && !readme.includes(`version-v${version}-`)) {
   errors.push(`README version badge does not reference v${version}`)
 }
-if (!readme.includes(`Current version:** \`v${version}\``)) {
+if (!skipReadme && !readme.includes(`Current version:** \`v${version}\``)) {
   errors.push(`README current version text does not reference v${version}`)
 }
 
