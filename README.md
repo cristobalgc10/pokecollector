@@ -304,6 +304,10 @@ All settings are persisted in the database and edited in the Settings UI.
 
 ## 🔄 Updating
 
+PokéCollector has a built-in upgrade safety layer for existing installs: before startup migrations run on a new app version, the backend creates an automatic SQL backup in `./backups` by default. Startup stops if that automatic backup fails, unless you explicitly disable the requirement with `PRE_UPGRADE_BACKUP_REQUIRED=false`.
+
+This automatic backup is still only a safety net. Keep creating your own manual backup before updates, especially before database major-version upgrades.
+
 ### PostgreSQL 18 upgrade
 
 PokéCollector now uses PostgreSQL 18 for Docker installs. Existing Docker installs that still have a PostgreSQL 15 data volume must run the one-time upgrade script before recreating the database container with PostgreSQL 18. PostgreSQL cannot upgrade a major-version data directory just by changing the Docker image.
