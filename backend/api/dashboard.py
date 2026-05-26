@@ -93,6 +93,8 @@ def get_dashboard(
         display_price = effective_market_price(card, item.variant, price_field)
         top_cards_data.append({
             "id": card.id,
+            "collection_item_id": item.id,
+            "card_id": card.id,
             "name": card.name,
             "set_id": card.set_id,
             "images_small": card.images_small,
@@ -136,6 +138,7 @@ def get_dashboard(
         if item.card:
             recent_data.append({
                 "id": item.id,
+                "collection_item_id": item.id,
                 "card_id": item.card_id,
                 "name": item.card.name,
                 "images_small": item.card.images_small,
