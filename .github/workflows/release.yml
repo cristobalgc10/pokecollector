@@ -21,8 +21,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git init .
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --force --tags origin "${GITHUB_SHA}"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" fetch --force --tags origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
 
       - name: Check version consistency
