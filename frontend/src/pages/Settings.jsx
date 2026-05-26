@@ -259,7 +259,7 @@ export default function Settings() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { user, updateCurrentUser, multiUser } = useAuth()
-  const { settings, updateSettings, t } = useSettings()
+  const { settings, updateSettings, t, pricePrimaryField, exchangeRate } = useSettings()
   const { theme, setTheme, themes } = useTheme()
   const [activeTab, setActiveTab] = useState('general')
 
@@ -524,6 +524,7 @@ export default function Settings() {
   const currentLang = settings.language || 'de'
   const currentCurrency = settings.currency || 'EUR'
   const currentPriceType = settings.price_primary || 'trend'
+  const exportParams = { price_field: pricePrimaryField, currency: currentCurrency, exchange_rate: exchangeRate }
   const currentTcgdexSyncLanguages = settings.tcgdex_sync_languages || 'en,de'
   const crossLanguagePriceFallback = settings.cross_language_price_fallback !== 'false'
   const crossLanguageImageFallback = settings.cross_language_image_fallback !== 'false'
@@ -958,7 +959,7 @@ export default function Settings() {
               </SettingsRow>
               <SettingsRow label={t('settings.csvExport')} description={t('settings.csvExportDesc')}>
                 <button
-                  onClick={exportCSV}
+                  onClick={() => exportCSV(exportParams)}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity"
                   style={{ background: 'rgba(255,255,255,0.07)', color: '#90a4ae', border: '1px solid rgba(255,255,255,0.1)' }}
                 >

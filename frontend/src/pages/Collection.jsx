@@ -13,6 +13,7 @@ import clsx from 'clsx'
 import { useTilt } from '../hooks/useTilt'
 import { cardImageUrl, resolveCardImageUrl } from '../utils/imageUrl'
 import FallbackBadges from '../components/FallbackBadges'
+import { getEffectiveCardPrice } from '../utils/prices'
 
 function TiltBinderCard({ className, onClick, children }) {
   const { ref, onMouseMove, onMouseEnter, onMouseLeave } = useTilt(10)
@@ -54,6 +55,7 @@ const HOLO_FIELD_MAP = {
   price_avg1: 'price_avg1_holo',
   price_avg7: 'price_avg7_holo',
   price_avg30: 'price_avg30_holo',
+  price_low: 'price_low_holo',
 }
 
 const CSV_IMPORT_HEADER = 'set_code,number,quantity,condition,variant,lang,purchase_price'
@@ -251,7 +253,7 @@ function HoloOverlay({ variant }) {
 // ─── CollectionEditModal ────────────────────────────────────────────────────
 // Opens when clicking any card in the collection. Allows editing + deleting.
 function CollectionEditModal({ item, onClose }) {
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const queryClient = useQueryClient()
   const card = item.card
 
@@ -408,8 +410,8 @@ function CollectionEditModal({ item, onClose }) {
               </p>
             )}
             {card?.rarity && <p className="text-xs text-text-muted mt-0.5">{card.rarity}</p>}
-            {card?.price_market && (
-              <p className="text-sm font-bold text-green mt-1">{formatPrice(card.price_market)}</p>
+            {getEffectiveCardPrice(card, item.variant, pricePrimaryField) > 0 && (
+              <p className="text-sm font-bold text-green mt-1">{formatPrice(getEffectiveCardPrice(card, item.variant, pricePrimaryField))}</p>
             )}
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary flex-shrink-0 p-1">
@@ -695,7 +697,7 @@ function CollectionEditModal({ item, onClose }) {
 }
 
 export default function Collection() {
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField, currency, exchangeRate } = useSettings()
   const COLLECTION_TABS = [
     { to: '/collection', label: t('nav.collection'), icon: Library },
     { to: '/binders', label: t('nav.binders'), icon: BookOpen },
@@ -768,7 +770,7 @@ export default function Collection() {
     }
   }
 
-  function getEffectivePrice(card, variant, primaryField = 'price_market') {
+  function getEffectivePrice(card, variant, primaryField = pricePrimaryField) {
     if (!card) return 0
     if (HOLO_VARIANTS.has(variant)) {
       // Map primary field to its holo equivalent
@@ -776,7 +778,6 @@ export default function Collection() {
       const holoVal = card[holoField]
       if (holoVal != null) return holoVal
     }
-    // Reverse Holo: standard non-holo CM price (reverse premium is TCGPlayer/USD only)
     return card[primaryField] ?? card.price_market ?? 0
   }
 
@@ -853,10 +854,11 @@ export default function Collection() {
     })
 
     return result
-  }, [items, filterRarity, filterCondition, filterVariant, filterSet, filterType, filterLang, filterMinPrice, filterMaxPrice, filterDuplicates, searchText, sortBy, sortOrder])
+  }, [items, filterRarity, filterCondition, filterVariant, filterSet, filterType, filterLang, filterMinPrice, filterMaxPrice, filterDuplicates, searchText, sortBy, sortOrder, pricePrimaryField])
 
   const totalValue = filtered.reduce((sum, item) => sum + (getEffectivePrice(item.card, item.variant) * item.quantity), 0)
   const totalCards = filtered.reduce((sum, item) => sum + item.quantity, 0)
+  const exportParams = { price_field: pricePrimaryField, currency, exchange_rate: exchangeRate }
 
   const resetFilters = () => {
     setFilterRarity(''); setFilterCondition(''); setFilterVariant('')
@@ -927,8 +929,8 @@ export default function Collection() {
           >
             <Upload size={14} />CSV
           </button>
-          <button onClick={exportCSV} className="btn-ghost text-sm py-1.5 px-2" title="CSV" aria-label="CSV"><Download size={14} />CSV</button>
-          <button onClick={exportPDF} className="btn-ghost text-sm py-1.5"><Download size={14} />PDF</button>
+          <button onClick={() => exportCSV(exportParams)} className="btn-ghost text-sm py-1.5 px-2" title="CSV" aria-label="CSV"><Download size={14} />CSV</button>
+          <button onClick={() => exportPDF(exportParams)} className="btn-ghost text-sm py-1.5"><Download size={14} />PDF</button>
         </div>
       </div>
 

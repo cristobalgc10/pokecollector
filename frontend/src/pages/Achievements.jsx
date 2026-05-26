@@ -25,7 +25,7 @@ export default function Achievements() {
   const { userId } = useParams()
   const navigate = useNavigate()
   const { user, multiUser } = useAuth()
-  const { t } = useSettings()
+  const { t, pricePrimaryField } = useSettings()
   const SOCIAL_TABS = [
     { to: '/leaderboard', label: t('nav.leaderboard'), icon: Trophy },
     { to: '/achievements', label: t('nav.achievements'), icon: Award },
@@ -34,8 +34,8 @@ export default function Achievements() {
   const isOtherUser = userId && Number(userId) !== user?.id
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['achievements', activeUserId],
-    queryFn: () => getAchievements(activeUserId).then((response) => response.data),
+    queryKey: ['achievements', activeUserId, pricePrimaryField],
+    queryFn: () => getAchievements(activeUserId, { price_field: pricePrimaryField }).then((response) => response.data),
     enabled: Boolean(activeUserId),
   })
 

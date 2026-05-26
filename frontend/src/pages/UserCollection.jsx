@@ -8,20 +8,12 @@ import { resolveCardImageUrl } from '../utils/imageUrl'
 import { CardModal } from '../components/CardItem'
 import CardImage from '../components/CardImage'
 import FallbackBadges from '../components/FallbackBadges'
-
-const HOLO_VARIANTS = new Set(['Holo', 'Holo Rare', 'Holo V', 'Holo VMAX', 'Holo VSTAR', 'Holo ex', 'Reverse Holo'])
-
-function getPrice(card, variant) {
-  if (HOLO_VARIANTS.has(variant) && card?.price_market_holo != null) {
-    return card.price_market_holo
-  }
-  return card?.price_market || 0
-}
+import { getEffectiveCardPrice } from '../utils/prices'
 
 export default function UserCollection() {
   const { userId } = useParams()
   const navigate = useNavigate()
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const [selectedCard, setSelectedCard] = useState(null)
   const [searchText, setSearchText] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -32,8 +24,8 @@ export default function UserCollection() {
   const [sortOrder, setSortOrder] = useState('asc')
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['user-collection', userId],
-    queryFn: () => getUserCollection(userId),
+    queryKey: ['user-collection', userId, pricePrimaryField],
+    queryFn: () => getUserCollection(userId, { price_field: pricePrimaryField }),
   })
 
   const rarities = useMemo(() => {
@@ -65,7 +57,7 @@ export default function UserCollection() {
       let valA, valB
       switch (sortBy) {
         case 'name': valA = a.card?.name || ''; valB = b.card?.name || ''; break
-        case 'price': valA = getPrice(a.card, a.variant); valB = getPrice(b.card, b.variant); break
+        case 'price': valA = getEffectiveCardPrice(a.card, a.variant, pricePrimaryField); valB = getEffectiveCardPrice(b.card, b.variant, pricePrimaryField); break
         case 'quantity': valA = a.quantity; valB = b.quantity; break
         case 'rarity': valA = a.card?.rarity || ''; valB = b.card?.rarity || ''; break
         default: valA = a.card?.name || ''; valB = b.card?.name || ''
@@ -77,9 +69,9 @@ export default function UserCollection() {
     })
 
     return result
-  }, [items, searchText, filterRarity, filterVariant, filterLang, sortBy, sortOrder])
+  }, [items, searchText, filterRarity, filterVariant, filterLang, sortBy, sortOrder, pricePrimaryField])
 
-  const totalValue = filtered.reduce((sum, item) => sum + getPrice(item.card, item.variant) * item.quantity, 0)
+  const totalValue = filtered.reduce((sum, item) => sum + getEffectiveCardPrice(item.card, item.variant, pricePrimaryField) * item.quantity, 0)
   const totalCards = filtered.reduce((sum, item) => sum + item.quantity, 0)
 
   const resetFilters = () => {
@@ -188,7 +180,7 @@ export default function UserCollection() {
             const card = item.card
             if (!card) return null
             const imgSrc = resolveCardImageUrl(card)
-            const price = getPrice(card, item.variant)
+            const price = getEffectiveCardPrice(card, item.variant, pricePrimaryField)
             return (
               <div
                 key={item.id}

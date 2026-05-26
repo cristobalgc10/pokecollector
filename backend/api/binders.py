@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +12,7 @@ from api.collection import ensure_card_exists, _find_card_by_code
 from services import pokemon_api
 from services.card_fallbacks import apply_cross_language_fallbacks
 from services.card_upsert import upsert_card
-from services.card_values import effective_market_price
+from services.card_values import effective_market_price, normalize_price_field
 import datetime
 import csv
 import io
@@ -159,8 +159,9 @@ def _binder_card_summary(
     is_current: bool = False,
     collection_item: CollectionItem | None = None,
     available_quantity: int | None = None,
+    price_field: str | None = "price_trend",
 ) -> dict:
-    price = effective_market_price(card, collection_item.variant if collection_item else None) or 0
+    price = effective_market_price(card, collection_item.variant if collection_item else None, price_field) or 0
     summary = {
         "id": card.id,
         "name": card.name,
@@ -189,12 +190,12 @@ def _binder_card_summary(
     return summary
 
 
-def _price_sort_value(card: Card, variant: str | None = None) -> float | None:
-    price = effective_market_price(card, variant)
+def _price_sort_value(card: Card, variant: str | None = None, price_field: str | None = "price_trend") -> float | None:
+    price = effective_market_price(card, variant, price_field)
     return float(price) if price and price > 0 else None
 
 
-def _cheapest_equivalent_candidate(db: Session, source_card: Card) -> Card | None:
+def _cheapest_equivalent_candidate(db: Session, source_card: Card, price_field: str | None = "price_trend") -> Card | None:
     source_card = _ensure_card_gameplay_data(db, source_card)
     if not source_card or not source_card.playable_fingerprint:
         return None
@@ -209,7 +210,7 @@ def _cheapest_equivalent_candidate(db: Session, source_card: Card) -> Card | Non
         Card.lang == (source_card.lang or "en"),
         Card.is_custom.is_(False),
     ).all()
-    priced_candidates = [(card, _price_sort_value(card)) for card in candidates]
+    priced_candidates = [(card, _price_sort_value(card, price_field=price_field)) for card in candidates]
     priced_candidates = [(card, price) for card, price in priced_candidates if price is not None]
     if not priced_candidates:
         return None
@@ -222,6 +223,7 @@ def _collection_optimizer_candidates(
     source_card: Card,
     source_item_id: int | None,
     excluded_collection_item_ids: set[int] | None = None,
+    price_field: str | None = "price_trend",
 ) -> list[tuple[CollectionItem, Card, float]]:
     """Return cheaper owned playable-equivalent collection items for collection binders."""
     usage_counts = _collection_binder_usage_counts(db, current_user)
@@ -246,14 +248,15 @@ def _collection_optimizer_candidates(
         card = _ensure_card_gameplay_data(db, item.card)
         if not card or card.playable_fingerprint != source_card.playable_fingerprint:
             continue
-        price = _price_sort_value(card, item.variant)
+        price = _price_sort_value(card, item.variant, price_field)
         if price is None:
             continue
         candidates.append((item, card, price))
     return candidates
 
 
-def _build_print_optimization_preview(db: Session, binder: Binder, current_user: User) -> dict:
+def _build_print_optimization_preview(db: Session, binder: Binder, current_user: User, price_field: str | None = "price_trend") -> dict:
+    price_field = normalize_price_field(price_field)
     binder_type = binder.binder_type or "collection"
     if binder_type not in {"collection", "wishlist"}:
         raise HTTPException(status_code=400, detail="Print optimization is available for collection and wishlist binders")
@@ -280,7 +283,7 @@ def _build_print_optimization_preview(db: Session, binder: Binder, current_user:
             source_item = bc.collection_item
             if not source_item or source_item.user_id != current_user.id:
                 continue
-            current_price = _price_sort_value(source_card, source_item.variant)
+            current_price = _price_sort_value(source_card, source_item.variant, price_field)
             if current_price is None:
                 continue
             candidates = _collection_optimizer_candidates(
@@ -289,6 +292,7 @@ def _build_print_optimization_preview(db: Session, binder: Binder, current_user:
                 source_card,
                 source_item.id,
                 current_binder_collection_item_ids | used_suggested_collection_item_ids,
+                price_field,
             )
             cheaper_candidates = [item for item in candidates if item[2] < current_price]
             if not cheaper_candidates:
@@ -303,8 +307,8 @@ def _build_print_optimization_preview(db: Session, binder: Binder, current_user:
             recommendations.append({
                 "binder_card_id": bc.id,
                 "required_quantity": required_quantity,
-                "current": _binder_card_summary(source_card, owned_quantity=source_item.quantity or 0, is_current=True, collection_item=source_item),
-                "suggested": _binder_card_summary(candidate, owned_quantity=target_item.quantity or 0, is_current=False, collection_item=target_item),
+                "current": _binder_card_summary(source_card, owned_quantity=source_item.quantity or 0, is_current=True, collection_item=source_item, price_field=price_field),
+                "suggested": _binder_card_summary(candidate, owned_quantity=target_item.quantity or 0, is_current=False, collection_item=target_item, price_field=price_field),
                 "current_price": current_price,
                 "suggested_price": suggested_price,
                 "savings_per_copy": round(savings_per_copy, 2),
@@ -314,13 +318,13 @@ def _build_print_optimization_preview(db: Session, binder: Binder, current_user:
 
         cache_key = f"{source_card.lang or 'en'}:{source_card.playable_fingerprint}"
         if cache_key not in candidate_cache:
-            candidate_cache[cache_key] = _cheapest_equivalent_candidate(db, source_card)
+            candidate_cache[cache_key] = _cheapest_equivalent_candidate(db, source_card, price_field)
         candidate = candidate_cache[cache_key]
         if not candidate or candidate.id == bc.card_id:
             continue
 
-        current_price = _price_sort_value(source_card)
-        suggested_price = _price_sort_value(candidate)
+        current_price = _price_sort_value(source_card, price_field=price_field)
+        suggested_price = _price_sort_value(candidate, price_field=price_field)
         if current_price is None or suggested_price is None:
             continue
         if suggested_price >= current_price:
@@ -331,8 +335,8 @@ def _build_print_optimization_preview(db: Session, binder: Binder, current_user:
         recommendations.append({
             "binder_card_id": bc.id,
             "required_quantity": required_quantity,
-            "current": _binder_card_summary(source_card, owned_quantity=0, is_current=True),
-            "suggested": _binder_card_summary(candidate, owned_quantity=0, is_current=False),
+            "current": _binder_card_summary(source_card, owned_quantity=0, is_current=True, price_field=price_field),
+            "suggested": _binder_card_summary(candidate, owned_quantity=0, is_current=False, price_field=price_field),
             "current_price": current_price,
             "suggested_price": suggested_price,
             "savings_per_copy": round(savings_per_copy, 2),
@@ -451,6 +455,7 @@ def delete_binder(
 @router.get("/{binder_id}/cards")
 def get_binder_cards(
     binder_id: int,
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -467,6 +472,7 @@ def get_binder_cards(
         raise HTTPException(status_code=404, detail="Binder not found")
 
     binder_type = binder.binder_type or "collection"
+    price_field = normalize_price_field(price_field)
 
     binder_cards = db.query(BinderCard).options(
         joinedload(BinderCard.card).joinedload(Card.set_ref),
@@ -522,7 +528,7 @@ def get_binder_cards(
         owned_quantity = 1 if binder_type == "collection" and bc.collection_item_id and col_item else int(collection_quantities.get(bc.card_id, 0) or 0)
         fulfilled_quantity = min(owned_quantity, required_quantity)
         missing_quantity = max(required_quantity - owned_quantity, 0)
-        price = effective_market_price(bc.card, col_item.variant if col_item else None) or 0
+        price = effective_market_price(bc.card, col_item.variant if col_item else None, price_field) or 0
 
         total_required_count += required_quantity
         owned_count += fulfilled_quantity
@@ -584,6 +590,7 @@ def get_binder_cards(
 @router.get("/{binder_id}/optimize-prints")
 def preview_binder_print_optimization(
     binder_id: int,
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -594,13 +601,14 @@ def preview_binder_print_optimization(
     ).first()
     if not binder:
         raise HTTPException(status_code=404, detail="Binder not found")
-    return _build_print_optimization_preview(db, binder, current_user)
+    return _build_print_optimization_preview(db, binder, current_user, price_field)
 
 
 @router.post("/{binder_id}/optimize-prints")
 def apply_binder_print_optimization(
     binder_id: int,
     update: BinderPrintOptimizationApply | None = None,
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -612,7 +620,7 @@ def apply_binder_print_optimization(
     if not binder:
         raise HTTPException(status_code=404, detail="Binder not found")
 
-    preview = _build_print_optimization_preview(db, binder, current_user)
+    preview = _build_print_optimization_preview(db, binder, current_user, price_field)
     selected_ids = None
     if update and update.selected_binder_card_ids is not None:
         selected_ids = set(update.selected_binder_card_ids)
@@ -828,6 +836,7 @@ def update_binder_entry(
 def get_binder_entry_equivalent_prints(
     binder_id: int,
     binder_card_id: int,
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -839,6 +848,7 @@ def get_binder_entry_equivalent_prints(
     if not binder:
         raise HTTPException(status_code=404, detail="Binder not found")
     binder_type = binder.binder_type or "collection"
+    price_field = normalize_price_field(price_field)
 
     bc = db.query(BinderCard).options(joinedload(BinderCard.card)).filter(
         BinderCard.id == binder_card_id,
@@ -883,6 +893,7 @@ def get_binder_entry_equivalent_prints(
                 is_current=is_current,
                 collection_item=item,
                 available_quantity=available_quantity,
+                price_field=price_field,
             ))
         summaries.sort(key=lambda item: (
             not item["is_current"],
@@ -913,6 +924,7 @@ def get_binder_entry_equivalent_prints(
             card,
             owned_quantity=collection_quantities.get(card.id, 0),
             is_current=card.id == bc.card_id,
+            price_field=price_field,
         )
         for card in candidates
     ]

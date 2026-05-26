@@ -8,6 +8,7 @@ import TabNav from '../components/TabNav'
 import toast from 'react-hot-toast'
 import { resolveCardImageUrl } from '../utils/imageUrl'
 import FallbackBadges from '../components/FallbackBadges'
+import { getEffectiveCardPrice } from '../utils/prices'
 
 function AlertEditor({ item, onDone }) {
   const [above, setAbove] = useState(item.price_alert_above || '')
@@ -52,7 +53,7 @@ function AlertEditor({ item, onDone }) {
 }
 
 export default function Wishlist() {
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const [editingId, setEditingId] = useState(null)
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState('desc')
@@ -105,7 +106,7 @@ export default function Wishlist() {
 
   const filtered = useMemo(() => {
     let result = items.filter(item => {
-      const price = item.card?.price_market
+      const price = getEffectiveCardPrice(item.card, null, pricePrimaryField)
       if (filterSet && item.card?.set_ref?.id !== filterSet) return false
       if (filterRarity && item.card?.rarity !== filterRarity) return false
       if (filterMinPrice && (price == null || price < parseFloat(filterMinPrice))) return false
@@ -117,7 +118,7 @@ export default function Wishlist() {
     result = [...result].sort((a, b) => {
       let valA, valB
       switch (sortBy) {
-        case 'price': valA = a.card?.price_market ?? -1; valB = b.card?.price_market ?? -1; break
+        case 'price': valA = getEffectiveCardPrice(a.card, null, pricePrimaryField) || -1; valB = getEffectiveCardPrice(b.card, null, pricePrimaryField) || -1; break
         case 'name': valA = (a.card?.name || '').toLowerCase(); valB = (b.card?.name || '').toLowerCase(); break
         case 'created_at': valA = a.created_at || ''; valB = b.created_at || ''; break
         default: return 0
@@ -128,7 +129,7 @@ export default function Wishlist() {
     })
 
     return result
-  }, [items, filterSet, filterRarity, filterMinPrice, filterMaxPrice, filterHasAlert, sortBy, sortOrder])
+  }, [items, filterSet, filterRarity, filterMinPrice, filterMaxPrice, filterHasAlert, sortBy, sortOrder, pricePrimaryField])
 
   const resetFilters = () => {
     setFilterSet(''); setFilterRarity(''); setFilterMinPrice(''); setFilterMaxPrice(''); setFilterHasAlert(false)
@@ -248,7 +249,7 @@ export default function Wishlist() {
                   <tbody>
                     {filtered.map((item) => {
                       const card = item.card
-                      const price = card?.price_market
+                      const price = getEffectiveCardPrice(card, null, pricePrimaryField)
                       const alertAbove = price && item.price_alert_above && price >= item.price_alert_above
                       const alertBelow = price && item.price_alert_below && price <= item.price_alert_below
 
@@ -330,7 +331,7 @@ export default function Wishlist() {
               <div className="md:hidden space-y-2 p-2">
                 {filtered.map((item) => {
                   const card = item.card
-                  const price = card?.price_market
+                  const price = getEffectiveCardPrice(card, null, pricePrimaryField)
                   const alertAbove = price && item.price_alert_above && price >= item.price_alert_above
                   const alertBelow = price && item.price_alert_below && price <= item.price_alert_below
 

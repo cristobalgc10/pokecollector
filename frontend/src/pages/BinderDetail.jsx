@@ -117,7 +117,7 @@ function TiltBinderCard({ className, onClick, children }) {
 export default function BinderDetail() {
   const { binderId } = useParams()
   const navigate = useNavigate()
-  const { t } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const queryClient = useQueryClient()
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -135,8 +135,8 @@ export default function BinderDetail() {
   const selectedCardCloseRef = useRef(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['binder-cards', binderId],
-    queryFn: () => getBinderCards(parseInt(binderId)).then(r => r.data),
+    queryKey: ['binder-cards', binderId, pricePrimaryField],
+    queryFn: () => getBinderCards(parseInt(binderId), { price_field: pricePrimaryField }).then(r => r.data),
   })
 
   const binder = data?.binder
@@ -291,8 +291,8 @@ export default function BinderDetail() {
   })
 
   const { data: equivalentPrintsData, isLoading: equivalentPrintsLoading } = useQuery({
-    queryKey: ['binder-entry-equivalents', binderId, binderType, selectedCard?.binder_card_id],
-    queryFn: () => getBinderEntryEquivalentPrints(parseInt(binderId), selectedCard.binder_card_id),
+    queryKey: ['binder-entry-equivalents', binderId, binderType, selectedCard?.binder_card_id, pricePrimaryField],
+    queryFn: () => getBinderEntryEquivalentPrints(parseInt(binderId), selectedCard.binder_card_id, { price_field: pricePrimaryField }),
     enabled: (isWishlist || isCollection) && !!selectedCard?.binder_card_id,
   })
 
@@ -308,8 +308,8 @@ export default function BinderDetail() {
   })
 
   const { data: printOptimizationData, isLoading: printOptimizationLoading, isError: printOptimizationError, error: printOptimizationErrorData } = useQuery({
-    queryKey: ['binder-print-optimization', binderId],
-    queryFn: () => getBinderPrintOptimization(parseInt(binderId)),
+    queryKey: ['binder-print-optimization', binderId, pricePrimaryField],
+    queryFn: () => getBinderPrintOptimization(parseInt(binderId), { price_field: pricePrimaryField }),
     enabled: (isWishlist || isCollection) && showPrintOptimizer,
     retry: false,
   })
@@ -320,9 +320,9 @@ export default function BinderDetail() {
   }, [showPrintOptimizer, printOptimizationData])
 
   const applyPrintOptimizationMutation = useMutation({
-    mutationFn: (selectedIds) => applyBinderPrintOptimization(parseInt(binderId), selectedIds),
+    mutationFn: (selectedIds) => applyBinderPrintOptimization(parseInt(binderId), selectedIds, { price_field: pricePrimaryField }),
     onSuccess: (result) => {
-      toast.success(`${t('binderTypes.optimizePrintsApplied')} ✓ (${result.applied} ${t('binderTypes.updated')}, ${result.skipped} ${t('binderTypes.skipped')}, €${(result.total_savings || 0).toFixed(2)})`)
+      toast.success(`${t('binderTypes.optimizePrintsApplied')} ✓ (${result.applied} ${t('binderTypes.updated')}, ${result.skipped} ${t('binderTypes.skipped')}, ${formatPrice(result.total_savings || 0)})`)
       queryClient.invalidateQueries({ queryKey: ['binder-cards', binderId] })
       queryClient.invalidateQueries({ queryKey: ['binders'] })
       queryClient.invalidateQueries({ queryKey: ['binder-print-optimization', binderId] })
@@ -466,14 +466,14 @@ export default function BinderDetail() {
           <div className="card p-3">
             <p className="text-xs text-text-muted">{t('binderTypes.currentValue')}</p>
             <p className={`text-lg font-bold ${hasMissingCurrentValueData ? 'text-text-muted' : 'text-yellow'}`}>
-              {hasMissingCurrentValueData ? t('binderTypes.noPriceData') : `€${currentValue.toFixed(2)}`}
+              {hasMissingCurrentValueData ? t('binderTypes.noPriceData') : formatPrice(currentValue)}
             </p>
           </div>
         )}
         <div className="card p-3">
           <p className="text-xs text-text-muted">{isWishlist ? t('binderTypes.costToComplete') : t('binderTypes.binderValue')}</p>
           <p className={`text-lg font-bold ${hasMissingPriceData ? 'text-text-muted' : 'text-yellow'}`}>
-            {hasMissingPriceData ? t('binderTypes.noPriceData') : `€${displayedValue.toFixed(2)}`}
+            {hasMissingPriceData ? t('binderTypes.noPriceData') : formatPrice(displayedValue)}
           </p>
         </div>
       </div>
@@ -670,7 +670,7 @@ export default function BinderDetail() {
                 <div className="p-1.5">
                   <p className="text-xs text-text-primary font-medium truncate">{card.name}</p>
                   {card.price_market > 0 ? (
-                    <p className="text-xs text-green">€{card.price_market.toFixed(2)}</p>
+                    <p className="text-xs text-green">{formatPrice(card.price_market)}</p>
                   ) : (
                     <p className="text-xs text-text-muted">{t('binderTypes.noPriceDataShort')}</p>
                   )}
@@ -739,8 +739,8 @@ export default function BinderDetail() {
               {!printOptimizationError && (printOptimizationData?.recommendations || []).length > 0 && (
                 <>
                   <div className="rounded-xl bg-yellow/10 px-3 py-2 text-xs text-yellow space-y-1">
-                    <p>{t('binderTypes.optimizePrintsSummary')}: {printOptimizationData.change_count} · €{(printOptimizationData.total_savings || 0).toFixed(2)}</p>
-                    <p>{t('binderTypes.selectedOptimizationSummary')}: {selectedPrintOptimizationCount} · €{selectedPrintOptimizationSavings.toFixed(2)}</p>
+                    <p>{t('binderTypes.optimizePrintsSummary')}: {printOptimizationData.change_count} · {formatPrice(printOptimizationData.total_savings || 0)}</p>
+                    <p>{t('binderTypes.selectedOptimizationSummary')}: {selectedPrintOptimizationCount} · {formatPrice(selectedPrintOptimizationSavings)}</p>
                   </div>
                   <label className="inline-flex items-center gap-2 text-xs text-text-secondary">
                     <input
@@ -769,7 +769,7 @@ export default function BinderDetail() {
                                   {resolveCardImageUrl(item.current) && <img src={resolveCardImageUrl(item.current)} alt={item.current.name} className="w-9 aspect-[2.5/3.5] object-cover rounded" loading="lazy" />}
                                   <div className="min-w-0">
                                     <p className="text-xs font-semibold text-text-primary truncate">{item.current.set_name || item.current.set_id} #{item.current.number}</p>
-                                    <p className="text-[11px] text-text-muted">{item.current_price ? `€${item.current_price.toFixed(2)}` : t('binderTypes.noPriceDataShort')}</p>
+                                    <p className="text-[11px] text-text-muted">{item.current_price ? formatPrice(item.current_price) : t('binderTypes.noPriceDataShort')}</p>
                                     {(item.current.variant || item.current.condition) && <p className="text-[10px] text-text-muted truncate">{[item.current.variant, item.current.condition].filter(Boolean).join(' · ')}</p>}
                                   </div>
                                 </div>
@@ -777,14 +777,14 @@ export default function BinderDetail() {
                                 <div className="min-w-0 flex items-center gap-2 justify-end text-right">
                                   <div className="min-w-0">
                                     <p className="text-xs font-semibold text-text-primary truncate">{item.suggested.set_name || item.suggested.set_id} #{item.suggested.number}</p>
-                                    <p className="text-[11px] text-green">€{item.suggested_price.toFixed(2)}</p>
+                                    <p className="text-[11px] text-green">{formatPrice(item.suggested_price)}</p>
                                     {(item.suggested.variant || item.suggested.condition) && <p className="text-[10px] text-text-muted truncate">{[item.suggested.variant, item.suggested.condition].filter(Boolean).join(' · ')}</p>}
                                   </div>
                                   {resolveCardImageUrl(item.suggested) && <img src={resolveCardImageUrl(item.suggested)} alt={item.suggested.name} className="w-9 aspect-[2.5/3.5] object-cover rounded" loading="lazy" />}
                                 </div>
                               </div>
                               <p className="text-[11px] text-text-muted">
-                                {item.required_quantity}x · {t('binderTypes.estimatedSavings')}: €{item.total_savings.toFixed(2)}
+                                {item.required_quantity}x · {t('binderTypes.estimatedSavings')}: {formatPrice(item.total_savings)}
                               </p>
                             </div>
                           </label>
@@ -853,7 +853,7 @@ export default function BinderDetail() {
                   )}
                   <p className="text-xs text-text-muted">
                     {t('binderTypes.marketPrice')}: {selectedCard.price_market > 0 ? (
-                      <span className="text-green font-semibold">€{selectedCard.price_market.toFixed(2)}</span>
+                      <span className="text-green font-semibold">{formatPrice(selectedCard.price_market)}</span>
                     ) : (
                       <span>{t('binderTypes.noPriceData')}</span>
                     )}
@@ -892,7 +892,7 @@ export default function BinderDetail() {
                               <div className="flex items-center gap-2 flex-wrap text-[11px] text-text-muted">
                                 {print.lang && <span>{print.lang.toUpperCase()}</span>}
                                 {print.rarity && <span>{print.rarity}</span>}
-                                <span>{print.price_market > 0 ? `€${print.price_market.toFixed(2)}` : t('binderTypes.noPriceDataShort')}</span>
+                                <span>{print.price_market > 0 ? formatPrice(print.price_market) : t('binderTypes.noPriceDataShort')}</span>
                                 {print.variant && <span>{print.variant}</span>}
                                 {print.condition && <span>{print.condition}</span>}
                                 {print.owned && <span className="text-green font-semibold">{t('binderTypes.owned')} {print.owned_quantity}x</span>}

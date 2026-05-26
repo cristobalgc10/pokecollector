@@ -4,36 +4,20 @@ from sqlalchemy import func, desc
 from api.auth import get_current_user
 from database import get_db
 from models import CollectionItem, Card, Set, PortfolioSnapshot, SyncLog, ProductPurchase, User
+from services.card_values import effective_market_price, normalize_price_field
 import datetime
 
 router = APIRouter()
-
-# Valid price fields that can be requested
-VALID_PRICE_FIELDS = {"price_market", "price_trend", "price_avg1", "price_avg7", "price_avg30"}
-
-# Variants that use the Cardmarket holo price family
-HOLO_VARIANTS = {"Holo", "Holo Rare", "Holo V", "Holo VMAX", "Holo VSTAR", "Holo ex", "Reverse Holo"}
-
-# Maps each standard price field to its holo equivalent
-HOLO_FIELD_MAP = {
-    "price_market": "price_market_holo",
-    "price_trend": "price_trend_holo",
-    "price_avg1": "price_avg1_holo",
-    "price_avg7": "price_avg7_holo",
-    "price_avg30": "price_avg30_holo",
-}
 
 
 @router.get("/")
 def get_dashboard(
     db: Session = Depends(get_db),
-    price_field: str = Query(default="price_market", description="Price field to use for value calculation"),
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     current_user: User = Depends(get_current_user),
 ):
     """Get dashboard statistics."""
-    # Validate price_field
-    if price_field not in VALID_PRICE_FIELDS:
-        price_field = "price_market"
+    price_field = normalize_price_field(price_field)
 
     # Collection stats
     items = db.query(CollectionItem).options(
@@ -45,21 +29,8 @@ def get_dashboard(
     total_cards = sum(item.quantity for item in items)
     unique_cards = len(items)
 
-    def get_card_price(card, field, variant=None):
-        """Get price by field, apply holo override for holo variants, fall back to price_market if None."""
-        if variant in HOLO_VARIANTS:
-            holo_field = HOLO_FIELD_MAP.get(field, field)
-            val = getattr(card, holo_field, None)
-            if val is not None:
-                return val
-        val = getattr(card, field, None)
-        if val is None:
-            val = card.price_market
-        return val or 0
-
-    # Always use price_market for current portfolio value on home/collection
     total_value = sum(
-        get_card_price(item.card, price_field, variant=item.variant) * item.quantity
+        effective_market_price(item.card, item.variant, price_field) * item.quantity
         for item in items if item.card
     )
 
@@ -108,7 +79,7 @@ def get_dashboard(
     def card_value(item):
         if not item.card:
             return 0
-        return get_card_price(item.card, price_field, variant=item.variant) * item.quantity
+        return effective_market_price(item.card, item.variant, price_field) * item.quantity
 
     top_cards = sorted(
         [item for item in items if item.card],
@@ -119,7 +90,7 @@ def get_dashboard(
     top_cards_data = []
     for item in top_cards:
         card = item.card
-        display_price = get_card_price(card, price_field, variant=item.variant)
+        display_price = effective_market_price(card, item.variant, price_field)
         top_cards_data.append({
             "id": card.id,
             "name": card.name,
@@ -170,7 +141,7 @@ def get_dashboard(
                 "images_small": item.card.images_small,
                 "quantity": item.quantity,
                 "added_at": item.added_at.isoformat() if item.added_at else None,
-                "price_market": item.card.price_market,
+                "price_market": effective_market_price(item.card, item.variant, price_field),
             })
 
     # Last sync

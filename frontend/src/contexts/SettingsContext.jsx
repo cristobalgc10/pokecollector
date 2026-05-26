@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import de from '../i18n/de'
 import en from '../i18n/en'
 import zh from '../i18n/zh'
+import { priceFieldFromPrimary } from '../utils/prices'
 
 const translations = { de, en, zh }
 
@@ -21,6 +22,7 @@ export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [loaded, setLoaded] = useState(false)
   const [exchangeRate, setExchangeRate] = useState(1.0)
+  const [usdToEurRate, setUsdToEurRate] = useState(0.91)
 
   // Load settings from backend on mount
   useEffect(() => {
@@ -38,7 +40,8 @@ export function SettingsProvider({ children }) {
       })
   }, [])
 
-  // Fetch exchange rate whenever currency changes to USD
+  // Fetch exchange rates for selected-currency display. Most app prices are
+  // stored in EUR; TCGPlayer prices are stored in USD and need the inverse path.
   useEffect(() => {
     const curr = settings.currency || 'EUR'
     if (curr === 'USD') {
@@ -48,6 +51,10 @@ export function SettingsProvider({ children }) {
         .catch(() => setExchangeRate(1.1))
     } else {
       setExchangeRate(1.0)
+      fetch('https://api.frankfurter.app/latest?from=USD&to=EUR')
+        .then(r => r.json())
+        .then(data => setUsdToEurRate(data.rates?.EUR || 0.91))
+        .catch(() => setUsdToEurRate(0.91))
     }
   }, [settings.currency])
 
@@ -115,12 +122,20 @@ export function SettingsProvider({ children }) {
 
   const currency = settings.currency || 'EUR'
   const currencySymbol = currency === 'USD' ? '$' : '€'
+  const pricePrimary = getPricePrimary()
+  const pricePrimaryField = priceFieldFromPrimary(pricePrimary)
 
   const formatPrice = useCallback((eurAmount) => {
     if (eurAmount == null || isNaN(Number(eurAmount))) return '-'
     const converted = Number(eurAmount) * exchangeRate
     return `${currencySymbol}${converted.toFixed(2)}`
   }, [exchangeRate, currencySymbol])
+
+  const formatUsdPrice = useCallback((usdAmount) => {
+    if (usdAmount == null || isNaN(Number(usdAmount))) return '-'
+    const converted = currency === 'USD' ? Number(usdAmount) : Number(usdAmount) * usdToEurRate
+    return `${currencySymbol}${converted.toFixed(2)}`
+  }, [currency, currencySymbol, usdToEurRate])
 
   return (
     <SettingsContext.Provider value={{
@@ -129,11 +144,14 @@ export function SettingsProvider({ children }) {
       t,
       language: lang,
       priceDisplay: getPriceDisplay(),
-      pricePrimary: getPricePrimary(),
+      pricePrimary,
+      pricePrimaryField,
       loaded,
       currency,
       currencySymbol,
+      exchangeRate,
       formatPrice,
+      formatUsdPrice,
     }}>
       {children}
     </SettingsContext.Provider>

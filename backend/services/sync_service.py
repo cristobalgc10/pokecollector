@@ -4,11 +4,11 @@ import math
 from typing import Any, Mapping
 from sqlalchemy.orm import Session, load_only
 from sqlalchemy import func, or_
-from models import Card, Set, CollectionItem, WishlistItem, BinderCard, PriceHistory, SyncLog, PortfolioSnapshot, CustomCardMatch, Setting, ProductPurchase, User
+from models import Card, Set, CollectionItem, WishlistItem, BinderCard, PriceHistory, SyncLog, PortfolioSnapshot, CustomCardMatch, Setting, ProductPurchase, User, UserSetting
 from services import pokemon_api, telegram
 from services.card_fallbacks import PRICE_FIELDS, apply_cross_language_fallbacks, build_missing_language_cards_for_set
 from services.card_upsert import upsert_card
-from services.card_values import effective_market_price
+from services.card_values import effective_market_price, normalize_price_field
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,17 @@ PRICE_SYNC_COLLECTION_FRACTION = 0.5
 MISSING_PRICE_SYNC_RATIO = 0.7
 NO_PRICE_RETRY_COOLDOWN = datetime.timedelta(hours=24)
 PRICE_SYNC_DB_CHUNK_SIZE = 400  # Stay below SQLite's common 999-parameter limit.
+
+
+def _user_price_field(db: Session, user_id: int | None) -> str:
+    if user_id is None:
+        return "price_trend"
+    row = db.query(UserSetting).filter(
+        UserSetting.user_id == user_id,
+        UserSetting.key == "price_primary",
+    ).first()
+    return normalize_price_field(row.value if row else "price_trend")
+
 
 def _has_any_price(card: Card | Mapping[str, Any]) -> bool:
     if isinstance(card, Mapping):
@@ -285,7 +296,9 @@ def check_wishlist_alerts(db: Session, updated_card_ids: list):
 
     for item in wishlist_items:
         card = item.card
-        if not card or card.price_market is None:
+        price_field = _user_price_field(db, item.user_id)
+        current_price = effective_market_price(card, price_field=price_field)
+        if not card or current_price is None:
             continue
 
         # Don't spam - max once per 23 hours
@@ -295,17 +308,17 @@ def check_wishlist_alerts(db: Session, updated_card_ids: list):
         triggered = False
         alert_type = None
 
-        if item.price_alert_above and card.price_market >= item.price_alert_above:
+        if item.price_alert_above and current_price >= item.price_alert_above:
             triggered = True
             alert_type = "above"
-        elif item.price_alert_below and card.price_market <= item.price_alert_below:
+        elif item.price_alert_below and current_price <= item.price_alert_below:
             triggered = True
             alert_type = "below"
 
         if triggered:
             threshold = item.price_alert_above if alert_type == "above" else item.price_alert_below
             telegram.send_price_alert(
-                card.name, card.price_market, threshold, alert_type, db=db, user_id=item.user_id
+                card.name, current_price, threshold, alert_type, db=db, user_id=item.user_id
             )
             item.notified_at = now
 
@@ -322,11 +335,12 @@ def take_portfolio_snapshot(db: Session, user_id: int | None = None):
         user_ids = [user_id]
 
     for scoped_user_id in user_ids:
+        price_field = _user_price_field(db, scoped_user_id)
         collection_items = db.query(CollectionItem).join(Card).filter(
             CollectionItem.user_id == scoped_user_id
         ).all()
         total_value = sum(
-            effective_market_price(item.card, item.variant) * item.quantity
+            effective_market_price(item.card, item.variant, price_field) * item.quantity
             for item in collection_items
             if item.card
         )
