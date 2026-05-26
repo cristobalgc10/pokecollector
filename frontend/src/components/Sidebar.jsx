@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import clsx from 'clsx'
 
 export default function Sidebar() {
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const { user, logout } = useAuth()
 
   const navItems = [
@@ -26,8 +26,8 @@ export default function Sidebar() {
   ]
 
   const { data } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => getDashboard().then(r => r.data),
+    queryKey: ['dashboard', pricePrimaryField],
+    queryFn: () => getDashboard({ price_field: pricePrimaryField }).then(r => r.data),
     refetchInterval: 60000,
   })
 

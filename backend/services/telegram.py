@@ -74,6 +74,31 @@ def send_message(text: str, db=None, user_id=None) -> bool:
         return False
 
 
+def _format_user_eur(amount: float, db=None, user_id=None) -> str:
+    currency = "EUR"
+    if db is not None and user_id is not None:
+        try:
+            from models import UserSetting
+            row = db.query(UserSetting).filter(
+                UserSetting.user_id == user_id,
+                UserSetting.key == "currency",
+            ).first()
+            currency = (row.value if row and row.value else "EUR").upper()
+        except Exception:
+            currency = "EUR"
+
+    if currency == "USD":
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get("https://api.frankfurter.app/latest?from=EUR&to=USD")
+                response.raise_for_status()
+                rate = response.json().get("rates", {}).get("USD") or 1.1
+        except Exception:
+            rate = 1.1
+        return f"${(amount or 0) * rate:.2f}"
+    return f"€{(amount or 0):.2f}"
+
+
 def send_price_alert(card_name: str, current_price: float, threshold: float, alert_type: str, db=None, user_id=None):
     """Send a price alert notification."""
     emoji = "📈" if alert_type == "above" else "📉"
@@ -82,8 +107,8 @@ def send_price_alert(card_name: str, current_price: float, threshold: float, ale
     text = (
         f"{emoji} <b>Pokemon TCG Price Alert</b>\n\n"
         f"🃏 <b>{card_name}</b>\n"
-        f"Current price: <b>€{current_price:.2f}</b>\n"
-        f"Alert threshold ({direction}): <b>€{threshold:.2f}</b>\n\n"
+        f"Current price: <b>{_format_user_eur(current_price, db=db, user_id=user_id)}</b>\n"
+        f"Alert threshold ({direction}): <b>{_format_user_eur(threshold, db=db, user_id=user_id)}</b>\n\n"
         f"Check your collection! 🎯"
     )
     return send_message(text, db=db, user_id=user_id)

@@ -1,13 +1,13 @@
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.auth import get_current_user
 from database import get_db
 from models import Card, CollectionItem, ProductPurchase, Set, User, WishlistItem
-from services.card_values import effective_market_price
+from services.card_values import effective_market_price, normalize_price_field
 
 router = APIRouter()
 
@@ -187,9 +187,11 @@ def _card_payload(card: Card | None):
     }
 
 
-def _load_user_stats(db: Session, user_ids: list[int] | None = None):
+def _load_user_stats(db: Session, user_ids: list[int] | None = None, price_field: str = "price_trend"):
+    price_field = normalize_price_field(price_field)
+
     def _get_price(row):
-        return effective_market_price(row, getattr(row, "variant", None))
+        return effective_market_price(row, getattr(row, "variant", None), price_field)
 
     user_query = db.query(User).filter(User.is_active == True)
     if user_ids is not None:
@@ -210,7 +212,17 @@ def _load_user_stats(db: Session, user_ids: list[int] | None = None):
         Card.name,
         Card.images_small,
         Card.price_market,
+        Card.price_low,
+        Card.price_trend,
+        Card.price_avg1,
+        Card.price_avg7,
+        Card.price_avg30,
         Card.price_market_holo,
+        Card.price_low_holo,
+        Card.price_trend_holo,
+        Card.price_avg1_holo,
+        Card.price_avg7_holo,
+        Card.price_avg30_holo,
         Card.set_id,
         Card.lang,
         Card.rarity,
@@ -340,8 +352,12 @@ def _load_user_stats(db: Session, user_ids: list[int] | None = None):
 
 
 @router.get("/leaderboard")
-def get_leaderboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    stats = _load_user_stats(db)
+def get_leaderboard(
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stats = _load_user_stats(db, price_field=price_field)
     leaderboard = sorted(
         stats.values(),
         key=lambda entry: (entry["total_value"], entry["total_cards"], entry["unique_cards"]),
@@ -353,6 +369,7 @@ def get_leaderboard(db: Session = Depends(get_db), current_user: User = Depends(
 @router.get("/compare/{user_id}")
 def compare_users(
     user_id: int,
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -363,7 +380,7 @@ def compare_users(
     if not other_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    stats = _load_user_stats(db, [current_user.id, user_id])
+    stats = _load_user_stats(db, [current_user.id, user_id], price_field=price_field)
     if current_user.id not in stats or user_id not in stats:
         raise HTTPException(status_code=404, detail="Comparison users not found")
 
@@ -444,12 +461,17 @@ def compare_users(
 
 
 @router.get("/achievements/{user_id}")
-def get_achievements(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_achievements(
+    user_id: int,
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    stats = _load_user_stats(db, [user_id]).get(user_id)
+    stats = _load_user_stats(db, [user_id], price_field=price_field).get(user_id)
     if not stats:
         raise HTTPException(status_code=404, detail="User stats not found")
 

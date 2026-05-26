@@ -27,18 +27,14 @@ const RARITY_COLORS = [
 
 const PRODUCT_TYPES = ['Booster Pack', 'Booster Box', 'Elite Trainer Box', 'Tin', 'Bundle', 'Collection Box', 'Blister', 'Other']
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, formatPrice }) {
   if (active && payload && payload.length) {
     return (
       <div className="bg-bg-surface border border-border rounded-lg p-3 text-sm shadow-xl">
         <p className="text-text-muted mb-1">{label}</p>
         {payload.map((entry, i) => (
           <p key={i} style={{ color: entry.color }} className="font-medium">
-            {entry.name}: {typeof entry.value === 'number'
-              ? (entry.name.includes('€') || ['Value', 'Cost', 'P&L', 'Wert', 'Kosten', 'G&V'].includes(entry.name)
-                ? `€${entry.value.toFixed(2)}`
-                : entry.value)
-              : entry.value}
+            {entry.name}: {typeof entry.value === 'number' ? formatPrice(entry.value) : entry.value}
           </p>
         ))}
       </div>
@@ -157,7 +153,7 @@ function AddExpenseModal({ onClose, onSuccess }) {
 }
 
 export default function Analytics() {
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const [moversPeriod, setMoversPeriod] = useState('7d')
   const [activeTab, setActiveTab] = useState('duplicates')
   const [showExpenseModal, setShowExpenseModal] = useState(false)
@@ -169,24 +165,24 @@ export default function Analytics() {
   ]
 
   const { data: duplicates = [], isLoading: dupLoading } = useQuery({
-    queryKey: ['duplicates'],
-    queryFn: () => getDuplicates().then(r => r.data),
+    queryKey: ['duplicates', pricePrimaryField],
+    queryFn: () => getDuplicates({ price_field: pricePrimaryField }).then(r => r.data),
   })
 
   const moversDay = PERIOD_DAYS[moversPeriod] || 7
   const { data: topMovers = [], isLoading: moversLoading } = useQuery({
-    queryKey: ['top-movers', moversDay],
-    queryFn: () => getTopMovers(moversDay).then(r => r.data),
+    queryKey: ['top-movers', moversDay, pricePrimaryField],
+    queryFn: () => getTopMovers(moversDay, { price_field: pricePrimaryField }).then(r => r.data),
   })
 
   const { data: rarityStats = [], isLoading: rarityLoading } = useQuery({
-    queryKey: ['rarity-stats'],
-    queryFn: () => getRarityStats().then(r => r.data),
+    queryKey: ['rarity-stats', pricePrimaryField],
+    queryFn: () => getRarityStats({ price_field: pricePrimaryField }).then(r => r.data),
   })
 
   const { data: investmentData = [], isLoading: investLoading } = useQuery({
-    queryKey: ['investment-tracker'],
-    queryFn: () => getInvestmentTracker().then(r => r.data),
+    queryKey: ['investment-tracker', pricePrimaryField],
+    queryFn: () => getInvestmentTracker({ price_field: pricePrimaryField }).then(r => r.data),
   })
 
   const { data: products = [] } = useQuery({
@@ -292,8 +288,8 @@ export default function Analytics() {
                         <td className="px-4 py-3 text-text-secondary text-xs">{item.set_name || '-'}</td>
                         <td className="px-4 py-3 text-text-secondary text-xs">{item.rarity || '-'}</td>
                         <td className="px-4 py-3 text-center font-bold text-brand-red">{item.quantity}x</td>
-                        <td className="px-4 py-3 text-right text-text-primary">€{item.price_market?.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-green">€{item.total_value?.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-text-primary">{formatPrice(item.price_market)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-green">{formatPrice(item.total_value)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -310,8 +306,8 @@ export default function Analytics() {
                       { label: `${item.quantity}x`, variant: 'red' },
                       ...(item.rarity ? [{ label: item.rarity, variant: 'gray' }] : []),
                     ]}
-                    value={`€${item.total_value?.toFixed(2)}`}
-                    valueSecondary={`€${item.price_market?.toFixed(2)}`}
+                    value={formatPrice(item.total_value)}
+                    valueSecondary={formatPrice(item.price_market)}
                   />
                 ))}
               </div>
@@ -343,7 +339,7 @@ export default function Analytics() {
                     <p className="text-xs text-text-muted">{card.rarity}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm text-text-secondary">€{card.old_price?.toFixed(2)} → €{card.current_price?.toFixed(2)}</p>
+                    <p className="text-sm text-text-secondary">{formatPrice(card.old_price)} → {formatPrice(card.current_price)}</p>
                     <div className={clsx(
                       'flex items-center justify-end gap-1 font-bold',
                       card.change_pct >= 0 ? 'text-green' : 'text-brand-red'
@@ -351,7 +347,7 @@ export default function Analytics() {
                       {card.change_pct >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                       {card.change_pct >= 0 ? '+' : ''}{card.change_pct}%
                       <span className="text-xs font-normal ml-1">
-                        ({card.change_abs >= 0 ? '+' : ''}€{card.change_abs?.toFixed(2)})
+                        ({card.change_abs >= 0 ? '+' : ''}{formatPrice(card.change_abs)})
                       </span>
                     </div>
                   </div>
@@ -394,9 +390,9 @@ export default function Analytics() {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={rarityStats} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3d" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#606078', fontSize: 11 }} tickFormatter={v => `€${v}`} />
+                    <XAxis type="number" tick={{ fill: '#606078', fontSize: 11 }} tickFormatter={v => formatPrice(v)} />
                     <YAxis dataKey="rarity" type="category" tick={{ fill: '#606078', fontSize: 10 }} width={100} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Tooltip content={<CustomTooltip formatPrice={formatPrice} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Bar dataKey="total_value" name={t('analytics.value')} radius={[0, 4, 4, 0]}>
                       {rarityStats.map((_, i) => <Cell key={i} fill={RARITY_COLORS[i % RARITY_COLORS.length]} />)}
                     </Bar>
@@ -424,7 +420,7 @@ export default function Analytics() {
                           </td>
                           <td className="py-2 text-right text-text-secondary">{r.count}</td>
                           <td className="py-2 text-right text-text-secondary">{r.percentage}%</td>
-                          <td className="py-2 text-right text-green font-medium">€{r.total_value?.toFixed(2)}</td>
+                          <td className="py-2 text-right text-green font-medium">{formatPrice(r.total_value)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -438,7 +434,7 @@ export default function Analytics() {
                         <p className="text-sm font-medium text-text-primary truncate">{r.rarity}</p>
                         <p className="text-xs text-text-secondary">{r.count} · {r.percentage}%</p>
                       </div>
-                      <p className="text-green font-medium text-sm flex-shrink-0">€{r.total_value?.toFixed(2)}</p>
+                      <p className="text-green font-medium text-sm flex-shrink-0">{formatPrice(r.total_value)}</p>
                     </div>
                   ))}
                 </div>
@@ -518,8 +514,8 @@ export default function Analytics() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3d" />
                     <XAxis dataKey="date" tick={{ fill: '#606078', fontSize: 11 }} />
-                    <YAxis tick={{ fill: '#606078', fontSize: 11 }} tickFormatter={v => `€${v}`} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <YAxis tick={{ fill: '#606078', fontSize: 11 }} tickFormatter={v => formatPrice(v)} />
+                    <Tooltip content={<CustomTooltip formatPrice={formatPrice} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Area type="monotone" dataKey="cost" name={t('analytics.cost')} stroke="#606078" fill="url(#costGrad)" strokeWidth={1.5} strokeDasharray="4 4" />
                     <Area type="monotone" dataKey="value" name={t('analytics.value')} stroke="#EF1515" fill="url(#valueGrad)" strokeWidth={2} />
                   </AreaChart>
@@ -531,8 +527,8 @@ export default function Analytics() {
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3d" />
                     <XAxis dataKey="date" tick={{ fill: '#606078', fontSize: 11 }} />
-                    <YAxis tick={{ fill: '#606078', fontSize: 11 }} tickFormatter={v => `€${v}`} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <YAxis tick={{ fill: '#606078', fontSize: 11 }} tickFormatter={v => formatPrice(v)} />
+                    <Tooltip content={<CustomTooltip formatPrice={formatPrice} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Bar dataKey="pnl" name={t('analytics.pnl')} radius={[4, 4, 0, 0]}>
                       {chartData.map((entry, i) => (
                         <Cell key={i} fill={entry.pnl >= 0 ? '#22c55e' : '#EF1515'} />

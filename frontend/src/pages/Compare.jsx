@@ -81,12 +81,12 @@ function TrainerPanel({ trainer, formatPrice, t }) {
 export default function Compare() {
   const { userId } = useParams()
   const navigate = useNavigate()
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, pricePrimaryField } = useSettings()
   const { multiUser } = useAuth()
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['compare', userId],
-    queryFn: () => compareUsers(userId).then((response) => response.data),
+    queryKey: ['compare', userId, pricePrimaryField],
+    queryFn: () => compareUsers(userId, { price_field: pricePrimaryField }).then((response) => response.data),
     enabled: Boolean(userId),
   })
 

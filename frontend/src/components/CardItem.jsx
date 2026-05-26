@@ -5,13 +5,13 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { Plus, Check, Heart, BookOpen, X, PenLine, Pencil,  Trash2 } from 'lucide-react'
 import { addToCollection, addToWishlist, createCustomCard, updateCustomCard, updateCardCustomImage, deleteCustomCard, getSets, getPriceHistory } from '../api/client'
 import { useSettings } from '../contexts/SettingsContext'
-import PeriodSelector, { CARD_PERIODS, PERIOD_PRICE_FIELD } from './PeriodSelector'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 import { useTilt } from '../hooks/useTilt'
 import { cardImageUrl, resolveCardImageUrl } from '../utils/imageUrl'
 import { CARD_VARIANTS, getAvailableVariants, getDefaultVariant, getDefaultVariantOrNull } from '../utils/cardVariants'
 import FallbackBadges from './FallbackBadges'
+import { getEffectiveCardPrice } from '../utils/prices'
 
 const RARITY_COLORS = {
   'Common': 'text-text-secondary',
@@ -366,7 +366,7 @@ export function CustomCardModal({ onClose, onCreated, sets: setsProp = [], autoA
 export const CardItem = memo(function CardItem({ card, showActions = true, onAddToBinder = null, compact = false, lang = null }) {
   const [showModal, setShowModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const { t, pricePrimary, formatPrice } = useSettings()
+  const { t, pricePrimary, pricePrimaryField, formatPrice } = useSettings()
   const queryClient = useQueryClient()
 
   const addMutation = useMutation({
@@ -392,10 +392,13 @@ export const CardItem = memo(function CardItem({ card, showActions = true, onAdd
   const cardName = card.name
   const cardRarity = card.rarity
   const setName = card.set?.name || card.set_ref?.name || ''
-  const price = getPriceValue(card, pricePrimary)
-    ?? card.cardmarket?.prices?.trendPrice
-    ?? card.price_market
-    ?? card.price_trend
+  const selectedPrice = getEffectiveCardPrice(card, null, pricePrimaryField)
+  const price = selectedPrice > 0
+    ? selectedPrice
+    : (getPriceValue(card, pricePrimary)
+      ?? card.cardmarket?.prices?.trendPrice
+      ?? card.price_market
+      ?? card.price_trend)
 
   const rarityColor = RARITY_COLORS[cardRarity] || 'text-text-secondary'
   const { ref: tiltRef, onMouseMove: tiltMove, onMouseLeave: tiltLeave } = useTilt(10)
@@ -523,13 +526,12 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
   const [condition, setCondition] = useState('NM')
   const [variant, setVariant] = useState(() => getDefaultVariant(card))
   const [purchasePrice, setPurchasePrice] = useState('')
-  const [modalPeriod, setModalPeriod] = useState('total')
   const [resolvedCardId, setResolvedCardId] = useState(card.id)
   const [customImageUrl, setCustomImageUrl] = useState(card.custom_image_url || '')
   const [savedCustomImageUrl, setSavedCustomImageUrl] = useState(card.custom_image_url || '')
   const [customImageVersion, setCustomImageVersion] = useState(0)
   const customImageInputId = useId()
-  const { t, formatPrice } = useSettings()
+  const { t, formatPrice, formatUsdPrice, pricePrimary, pricePrimaryField } = useSettings()
   const queryClient = useQueryClient()
 
   // Price history chart
@@ -639,8 +641,11 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
     card.price_tcg_holo_market != null ? { key: 'tcg-holo', val: card.price_tcg_holo_market, label: 'Holo' } : null,
   ].filter(Boolean)
 
-  const periodPriceKey = PERIOD_PRICE_FIELD[modalPeriod]?.replace('price_', '') || 'trend'
-  const selectedPeriodPrice = getPriceValue(card, periodPriceKey)
+  const effectivePrimaryPrice = getEffectiveCardPrice(card, variant, pricePrimaryField)
+  const selectedPrimaryPrice = effectivePrimaryPrice > 0 ? effectivePrimaryPrice : getPriceValue(card, pricePrimary)
+  const historyPriceField = ['price_market', 'price_trend', 'price_low'].includes(pricePrimaryField) ? pricePrimaryField : 'price_market'
+  const historyDataKey = historyPriceField
+  const historyPriceLabel = pricePrimaryField === historyPriceField ? t(`prices.${pricePrimary}`) : t('prices.avg')
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/60 md:flex md:items-center md:justify-center md:bg-black/80 md:backdrop-blur-sm"
@@ -738,10 +743,9 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
                   <p className="text-xs text-text-muted font-medium uppercase tracking-wide">
                     {t('prices.cardmarketTitle')}
                   </p>
-                  <PeriodSelector value={modalPeriod} onChange={setModalPeriod} periods={CARD_PERIODS} size="sm" />
                 </div>
-                {selectedPeriodPrice != null && (
-                  <p className="text-2xl font-bold text-green">{formatPrice(selectedPeriodPrice)}</p>
+                {selectedPrimaryPrice != null && (
+                  <p className="text-2xl font-bold text-green">{formatPrice(selectedPrimaryPrice)}</p>
                 )}
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-xs border-t border-border pt-2">
                   {displayedPrices.map(({ key, val }) => (
@@ -759,7 +763,7 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
             {displayedHoloPrices.length > 0 && (
               <div className="bg-bg-card rounded-xl p-3 space-y-2">
                 <p className="text-xs text-text-muted font-medium uppercase tracking-wide">
-                  Cardmarket Holo (€)
+                  Cardmarket Holo
                 </p>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-xs">
                   {displayedHoloPrices.map(({ key, val }) => (
@@ -775,13 +779,13 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
             {tcgPrices.length > 0 && (
               <div className="bg-bg-card rounded-xl p-3 space-y-2">
                 <p className="text-xs text-text-muted font-medium uppercase tracking-wide">
-                  TCGPlayer (USD)
+                  TCGPlayer
                 </p>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   {tcgPrices.map(({ key, val, label }) => (
                     <div key={key}>
                       <span className="text-text-muted block">{label}</span>
-                      <span className="font-bold text-blue-400">${val.toFixed(2)}</span>
+                      <span className="font-bold text-blue-400">{formatUsdPrice(val)}</span>
                     </div>
                   ))}
                 </div>
@@ -860,7 +864,7 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
                       />
                       <YAxis
                         tick={{ fontSize: 10, fill: '#606078' }}
-                        tickFormatter={(v) => { try { return `${Number(v).toFixed(0)}€` } catch { return '' } }}
+                        tickFormatter={(v) => { try { return formatPrice(Number(v)) } catch { return '' } }}
                         axisLine={false}
                         tickLine={false}
                         width={40}
@@ -874,11 +878,11 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
                           fontSize: '0.75rem',
                         }}
                         labelFormatter={(d) => new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        formatter={(val) => { try { return [`${Number(val).toFixed(2)}€`, t('prices.trend')] } catch { return ['', ''] } }}
+                        formatter={(val) => { try { return [formatPrice(Number(val)), historyPriceLabel] } catch { return ['', ''] } }}
                       />
                       <Area
                         type="monotone"
-                        dataKey="price_trend"
+                        dataKey={historyDataKey}
                         stroke="#22c55e"
                         fill="url(#priceGrad)"
                         strokeWidth={2}
@@ -889,8 +893,8 @@ export function CardModal({ card, onClose, onEdit, defaultLang = 'en', ownedItem
                   </ResponsiveContainer>
                 </div>
                 {(() => {
-                  const first = safePriceHistory[0]?.price_trend
-                  const last = safePriceHistory[safePriceHistory.length - 1]?.price_trend
+                  const first = safePriceHistory[0]?.[historyDataKey]
+                  const last = safePriceHistory[safePriceHistory.length - 1]?.[historyDataKey]
                   if (first && last && first > 0) {
                     const change = ((last - first) / first) * 100
                     return (

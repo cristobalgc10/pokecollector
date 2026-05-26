@@ -1,4 +1,4 @@
-import { useState } from 'react'
+
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -10,7 +10,6 @@ import { getDashboard } from '../api/client'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { format, parseISO } from 'date-fns'
-import PeriodSelector, { CARD_PERIODS, PERIOD_PRICE_FIELD } from '../components/PeriodSelector'
 import TrainerCard from '../components/TrainerCard'
 import PokeBallLoader from '../components/PokeBallLoader'
 
@@ -32,12 +31,10 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function Dashboard() {
-  const { t, formatPrice, settings } = useSettings()
+  const { t, formatPrice, settings, pricePrimaryField } = useSettings()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [period, setPeriod] = useState('total')
-
-  const priceField = PERIOD_PRICE_FIELD[period] || 'price_trend'
+  const priceField = pricePrimaryField
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard', priceField],
@@ -179,9 +176,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
               {t('dashboard.topValuable')}
             </h2>
-            <div className="flex-shrink-0">
-              <PeriodSelector value={period} onChange={setPeriod} periods={CARD_PERIODS} />
-            </div>
+
           </div>
           <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4">
             {data.top_cards.slice(0, 10).map((card, i) => (

@@ -35,14 +35,14 @@ const PERIODS = [
 ]
 
 // ── Custom chart tooltip ──────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, formatPrice }) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-xl px-3 py-2 text-xs shadow-xl"
       style={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.12)' }}>
       <p className="text-text-muted mb-1">{label}</p>
       <p className="font-black" style={{ color: '#f5c842' }}>
-        €{Number(payload[0].value).toFixed(2)}
+        {formatPrice(Number(payload[0].value))}
       </p>
     </div>
   )
@@ -67,13 +67,13 @@ function CardThumb({ card, onClick }) {
 export default function HomeScreen() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { formatPrice, t } = useSettings()
+  const { formatPrice, t, pricePrimaryField } = useSettings()
   const { user, logout, multiUser } = useAuth()
   const [chartPeriod, setChartPeriod] = useState('1W')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => getDashboard().then(r => r.data),
+    queryKey: ['dashboard', pricePrimaryField],
+    queryFn: () => getDashboard({ price_field: pricePrimaryField }).then(r => r.data),
     refetchInterval: 60000,
   })
 
@@ -86,8 +86,8 @@ export default function HomeScreen() {
   // Portfolio history for chart — uses analytics/investment-tracker
   const activePeriod = PERIODS.find(p => p.key === chartPeriod)
   const { data: investmentData = [] } = useQuery({
-    queryKey: ['investment-tracker', chartPeriod],
-    queryFn: () => getInvestmentTracker({ period: activePeriod?.apiPeriod ?? 'max' }).then(r => r.data),
+    queryKey: ['investment-tracker', chartPeriod, pricePrimaryField],
+    queryFn: () => getInvestmentTracker({ period: activePeriod?.apiPeriod ?? 'max', price_field: pricePrimaryField }).then(r => r.data),
     refetchInterval: 120000,
   })
 
@@ -364,7 +364,7 @@ export default function HomeScreen() {
                 />
                 <YAxis hide domain={['auto', 'auto']} />
                 <Tooltip
-                  content={<ChartTooltip />}
+                  content={<ChartTooltip formatPrice={formatPrice} />}
                   cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
                 />
                 <Area

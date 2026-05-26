@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
@@ -8,7 +8,7 @@ from models import CollectionItem, Card, Set, User
 from schemas import CollectionItemCreate, CollectionItemUpdate, CollectionItemResponse, BulkCollectionAddRequest, BulkCollectionAddResponse
 from services import pokemon_api
 from services.card_fallbacks import apply_cross_language_fallbacks, build_missing_language_card
-from services.card_values import effective_market_price
+from services.card_values import effective_market_price, normalize_price_field
 import datetime
 import csv
 import io
@@ -31,9 +31,9 @@ def _normalize_collection_variant(variant: Optional[str]) -> str:
 
 _SET_CODE_API_CACHE: Optional[dict[str, List[dict]]] = None
 
-def _get_item_price(item):
-    """Return the correct market price for a collection item, respecting holo variant."""
-    return effective_market_price(item.card, item.variant)
+def _get_item_price(item, price_field="price_trend"):
+    """Return the selected market price for a collection item, respecting holo variant."""
+    return effective_market_price(item.card, item.variant, price_field)
 
 
 def _ensure_set_exists_for_card(db: Session, parsed: dict, lang: str, card_data: Optional[dict] = None) -> None:
@@ -609,6 +609,7 @@ def remove_from_collection(
 def get_collection_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
 ):
     """Get collection statistics."""
     items = db.query(CollectionItem).options(
@@ -617,8 +618,9 @@ def get_collection_stats(
 
     total_cards = sum(item.quantity for item in items)
     unique_cards = len(set(item.card_id for item in items))
+    price_field = normalize_price_field(price_field)
     total_value = sum(
-        _get_item_price(item) * item.quantity
+        _get_item_price(item, price_field) * item.quantity
         for item in items
         if item.card
     )

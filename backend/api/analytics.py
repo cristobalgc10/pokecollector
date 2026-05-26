@@ -3,20 +3,21 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from api.auth import get_current_user
 from database import get_db
-from services.card_values import effective_market_price
+from services.card_values import effective_market_price, normalize_price_field
 from models import CollectionItem, Card, PriceHistory, PortfolioSnapshot, Set, ProductPurchase, User
 from typing import Optional
 import datetime
 
 router = APIRouter()
 
-def _get_item_price(item):
-    """Return the correct market price for a collection item, respecting holo variant."""
-    return effective_market_price(item.card, item.variant)
+def _get_item_price(item, price_field="price_trend"):
+    """Return the selected market price for a collection item, respecting holo variant."""
+    return effective_market_price(item.card, item.variant, price_field)
 
 
 @router.get("/duplicates")
 def get_duplicates(
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -28,9 +29,12 @@ def get_duplicates(
         CollectionItem.quantity > 1,
     ).all()
 
+    price_field = normalize_price_field(price_field)
+
     result = []
     for item in items:
         if item.card:
+            price = _get_item_price(item, price_field)
             result.append({
                 "id": item.id,
                 "card_id": item.card_id,
@@ -38,8 +42,8 @@ def get_duplicates(
                 "set_name": item.card.set_ref.name if item.card.set_ref else None,
                 "images_small": item.card.images_small,
                 "quantity": item.quantity,
-                "price_market": item.card.price_market,
-                "total_value": round(_get_item_price(item) * item.quantity, 2),
+                "price_market": round(price, 2),
+                "total_value": round(price * item.quantity, 2),
                 "rarity": item.card.rarity,
             })
 
@@ -50,11 +54,14 @@ def get_duplicates(
 @router.get("/top-movers")
 def get_top_movers(
     days: int = Query(7, ge=1, le=30),
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get cards with most price change in last N days."""
     cutoff_date = datetime.date.today() - datetime.timedelta(days=days)
+    price_field = normalize_price_field(price_field)
+    history_field = price_field if price_field in {"price_market", "price_trend", "price_low"} else "price_market"
 
     # Get collection card IDs
     col_card_ids = [
@@ -69,21 +76,23 @@ def get_top_movers(
     results = []
     for card_id in col_card_ids:
         card = db.query(Card).filter(Card.id == card_id).first()
-        if not card or card.price_market is None:
+        if not card:
             continue
 
-        # Get oldest price in period
+        # Get oldest matching historical price in period. avg1/avg7/avg30 are not
+        # stored historically yet, so fall back to market history for those fields.
+        history_column = getattr(PriceHistory, history_field)
         old_price_entry = db.query(PriceHistory).filter(
             PriceHistory.card_id == card_id,
             PriceHistory.date >= cutoff_date,
-            PriceHistory.price_market.isnot(None),
+            history_column.isnot(None),
         ).order_by(PriceHistory.date.asc()).first()
 
-        if not old_price_entry or old_price_entry.price_market is None:
+        if not old_price_entry:
             continue
 
-        old_price = old_price_entry.price_market
-        current_price = card.price_market
+        old_price = getattr(old_price_entry, history_field)
+        current_price = effective_market_price(card, price_field=history_field)
 
         change_abs = current_price - old_price
         change_pct = ((current_price - old_price) / old_price * 100) if old_price > 0 else 0
@@ -106,6 +115,7 @@ def get_top_movers(
 
 @router.get("/rarity-stats")
 def get_rarity_stats(
+    price_field: str = Query(default="price_trend", description="Price field to use for value calculation"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -116,6 +126,7 @@ def get_rarity_stats(
         CollectionItem.user_id == current_user.id
     ).all()
 
+    price_field = normalize_price_field(price_field)
     rarity_counts = {}
     rarity_values = {}
 
@@ -124,7 +135,7 @@ def get_rarity_stats(
             rarity = item.card.rarity or "Unknown"
             rarity_counts[rarity] = rarity_counts.get(rarity, 0) + item.quantity
             rarity_values[rarity] = rarity_values.get(rarity, 0) + (
-                _get_item_price(item) * item.quantity
+                _get_item_price(item, price_field) * item.quantity
             )
 
     total = sum(rarity_counts.values())
@@ -152,7 +163,7 @@ def _calc_products_cost(db: Session, user_id: int):
     )
 
 
-def _take_portfolio_snapshot(db: Session, user_id: int):
+def _take_portfolio_snapshot(db: Session, user_id: int, price_field: str = "price_trend"):
     """Insert a new portfolio snapshot (called on every price sync)."""
     now = datetime.datetime.utcnow()
 
@@ -160,7 +171,7 @@ def _take_portfolio_snapshot(db: Session, user_id: int):
         CollectionItem.user_id == user_id
     ).all()
     total_value = sum(
-        _get_item_price(item) * item.quantity
+        _get_item_price(item, price_field) * item.quantity
         for item in collection_items
         if item.card
     )
@@ -236,12 +247,14 @@ def _downsample(snapshots, period: str):
 @router.get("/investment-tracker")
 def get_investment_tracker(
     period: str = Query('max'),
+    price_field: str = Query(default="price_trend", description="Price field to use for current value calculation"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get portfolio value over time with optional period filtering and downsampling."""
     # Always insert a fresh snapshot so the current state is represented
-    _take_portfolio_snapshot(db, current_user.id)
+    price_field = normalize_price_field(price_field)
+    _take_portfolio_snapshot(db, current_user.id, price_field)
 
     period = period.lower()
 

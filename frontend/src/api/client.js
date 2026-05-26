@@ -79,7 +79,7 @@ export const dismissCustomMatch = (matchId) => api.post(`/cards/custom/dismiss/$
 
 // Collection
 export const getCollection = (params) => api.get('/collection/', { params })
-export const getUserCollection = (userId) => api.get(`/collection/user/${userId}`).then(r => r.data)
+export const getUserCollection = (userId, params = {}) => api.get(`/collection/user/${userId}`, { params }).then(r => r.data)
 export const searchCollection = (params) => api.get('/collection/', { params })
 export const addToCollection = (data) => api.post('/collection/', data)
 export const bulkAddToCollection = (items) => api.post('/collection/bulk-add', { items }).then(r => r.data)
@@ -90,7 +90,7 @@ export const importCollectionCsv = (file) => {
 }
 export const updateCollectionItem = (id, data) => api.put(`/collection/${id}`, data)
 export const removeFromCollection = (id) => api.delete(`/collection/${id}`)
-export const getCollectionStats = () => api.get('/collection/stats/summary')
+export const getCollectionStats = (params = {}) => api.get('/collection/stats/summary', { params })
 
 // Sets
 export const getSets = (params) => api.get('/sets/', { params })
@@ -110,13 +110,13 @@ export const getBinders = () => api.get('/binders/')
 export const createBinder = (data) => api.post('/binders/', data)
 export const updateBinder = (id, data) => api.put(`/binders/${id}`, data)
 export const deleteBinder = (id) => api.delete(`/binders/${id}`)
-export const getBinderCards = (id) => api.get(`/binders/${id}/cards`)
+export const getBinderCards = (id, params = {}) => api.get(`/binders/${id}/cards`, { params })
 export const addCardToBinder = (binderId, cardId) => api.post(`/binders/${binderId}/cards?card_id=${cardId}`)
 export const addCollectionItemToBinder = (binderId, collectionItemId) => api.post(`/binders/${binderId}/collection-items?collection_item_id=${collectionItemId}`)
 export const updateBinderEntry = (binderId, binderCardId, data) => api.put(`/binders/${binderId}/entries/${binderCardId}`, data)
-export const getBinderEntryEquivalentPrints = (binderId, binderCardId) => api.get(`/binders/${binderId}/entries/${binderCardId}/equivalent-prints`).then(r => r.data)
-export const getBinderPrintOptimization = (binderId) => api.get(`/binders/${binderId}/optimize-prints`).then(r => r.data)
-export const applyBinderPrintOptimization = (binderId, selectedBinderCardIds = null) => api.post(`/binders/${binderId}/optimize-prints`, selectedBinderCardIds ? { selected_binder_card_ids: selectedBinderCardIds } : {}).then(r => r.data)
+export const getBinderEntryEquivalentPrints = (binderId, binderCardId, params = {}) => api.get(`/binders/${binderId}/entries/${binderCardId}/equivalent-prints`, { params }).then(r => r.data)
+export const getBinderPrintOptimization = (binderId, params = {}) => api.get(`/binders/${binderId}/optimize-prints`, { params }).then(r => r.data)
+export const applyBinderPrintOptimization = (binderId, selectedBinderCardIds = null, params = {}) => api.post(`/binders/${binderId}/optimize-prints`, selectedBinderCardIds ? { selected_binder_card_ids: selectedBinderCardIds } : {}, { params }).then(r => r.data)
 export const switchBinderEntryCard = (binderId, binderCardId, cardId, collectionItemId = null) => api.put(`/binders/${binderId}/entries/${binderCardId}/card`, { card_id: cardId, collection_item_id: collectionItemId }).then(r => r.data)
 export const addBinderEntryToWishlist = (binderId, binderCardId) => api.post(`/binders/${binderId}/entries/${binderCardId}/wishlist`)
 export const addBinderCardsToWishlist = (binderId) => api.post(`/binders/${binderId}/wishlist`).then(r => r.data)
@@ -149,9 +149,9 @@ export const exportBinderCsv = (binderId) => {
 export const getDashboard = (params) => api.get('/dashboard/', { params })
 
 // Analytics
-export const getDuplicates = () => api.get('/analytics/duplicates')
-export const getTopMovers = (days) => api.get('/analytics/top-movers', { params: { days } })
-export const getRarityStats = () => api.get('/analytics/rarity-stats')
+export const getDuplicates = (params = {}) => api.get('/analytics/duplicates', { params })
+export const getTopMovers = (days, params = {}) => api.get('/analytics/top-movers', { params: { ...params, days } })
+export const getRarityStats = (params = {}) => api.get('/analytics/rarity-stats', { params })
 export const getInvestmentTracker = (params = {}) => api.get('/analytics/investment-tracker', { params })
 export const getAnalyticsNewSets = () => api.get('/analytics/new-sets')
 
@@ -171,10 +171,11 @@ export const deleteProduct = (id) => api.delete(`/products/${id}`)
 export const getProductsSummary = () => api.get('/products/summary')
 
 // Export
-export const exportCSV = () => {
+export const exportCSV = (params = {}) => {
   const token = localStorage.getItem('token')
   const config = {
     responseType: 'blob',
+    params,
   }
   if (token) {
     config.headers = { Authorization: `Bearer ${token}` }
@@ -188,10 +189,11 @@ export const exportCSV = () => {
     window.URL.revokeObjectURL(url)
   })
 }
-export const exportPDF = () => {
+export const exportPDF = (params = {}) => {
   const token = localStorage.getItem('token')
   const config = {
     responseType: 'blob',
+    params,
   }
   if (token) {
     config.headers = { Authorization: `Bearer ${token}` }
@@ -263,8 +265,8 @@ export const getContributors = () => api.get('/github/contributors').then(r => r
 export const getSupporters = () => api.get('/github/supporters').then(r => r.data)
 
 // Social
-export const getLeaderboard = () => api.get('/social/leaderboard')
-export const compareUsers = (userId) => api.get(`/social/compare/${userId}`)
-export const getAchievements = (userId) => api.get(`/social/achievements/${userId}`)
+export const getLeaderboard = (params = {}) => api.get('/social/leaderboard', { params })
+export const compareUsers = (userId, params = {}) => api.get(`/social/compare/${userId}`, { params })
+export const getAchievements = (userId, params = {}) => api.get(`/social/achievements/${userId}`, { params })
 
 export default api
