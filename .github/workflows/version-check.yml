@@ -1,0 +1,46 @@
+name: Version Consistency
+
+on:
+  pull_request:
+    paths:
+      - VERSION
+      - README.md
+      - frontend/package.json
+      - frontend/package-lock.json
+      - scripts/check-version.mjs
+      - .github/workflows/release.yml
+      - .github/workflows/version-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - VERSION
+      - README.md
+      - frontend/package.json
+      - frontend/package-lock.json
+      - scripts/check-version.mjs
+      - .github/workflows/release.yml
+      - .github/workflows/version-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          auth_header="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          echo "::add-mask::${auth_header}"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: Basic ${auth_header}" fetch --force --tags origin "${GITHUB_REF}"
+          git checkout --detach FETCH_HEAD
+
+      - name: Check version consistency
+        run: node scripts/check-version.mjs
