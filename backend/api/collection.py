@@ -10,6 +10,7 @@ from services import pokemon_api
 from services.card_fallbacks import apply_cross_language_fallbacks, build_missing_language_card
 from services.card_numbers import card_number_matches
 from services.card_values import effective_market_price, normalize_price_field
+from services.collection_csv import collection_import_key, is_valid_collection_purchase_price, merge_collection_import_item, normalize_collection_variant
 import datetime
 import csv
 import io
@@ -27,8 +28,7 @@ ALLOWED_LANGS = {"en", "de"}
 
 
 def _normalize_collection_variant(variant: Optional[str]) -> str:
-    value = (variant or "").strip()
-    return value or "Normal"
+    return normalize_collection_variant(variant)
 
 _SET_CODE_API_CACHE: Optional[dict[str, List[dict]]] = None
 
@@ -267,8 +267,8 @@ def _parse_import_row(row: dict, row_number: int) -> CollectionItemCreate:
             purchase_price = float(purchase_price_raw)
         except ValueError as exc:
             raise ValueError("purchase_price must be a number") from exc
-        if purchase_price < 0:
-            raise ValueError("purchase_price must not be negative")
+        if not is_valid_collection_purchase_price(purchase_price):
+            raise ValueError("purchase_price must be a finite, non-negative number")
 
     return CollectionItemCreate(
         card_id=f"{set_code} {number}",
@@ -486,7 +486,7 @@ async def import_collection_csv(
     failed = 0
     errors: List[str] = []
     row_count = 0
-    validated_items: List[CollectionItemCreate] = []
+    validated_items: dict[tuple, CollectionItemCreate] = {}
 
     for row_number, row in enumerate(reader, start=2):
         if None in row:
@@ -503,7 +503,15 @@ async def import_collection_csv(
             item = _parse_import_row(row, row_number)
             set_code, card_number = item.card_id.split(" ", 1)
             card = _find_card_by_code(db, set_code, card_number, item.lang or "en")
-            validated_items.append(item.copy(update={"card_id": card.id}))
+            validated_item = item.copy(update={"card_id": card.id})
+            item_key = collection_import_key(
+                validated_item.card_id,
+                validated_item.variant,
+                validated_item.lang,
+                validated_item.condition,
+                validated_item.purchase_price,
+            )
+            merge_collection_import_item(validated_items, item_key, validated_item)
         except ValueError as exc:
             db.rollback()
             failed += 1
@@ -521,7 +529,7 @@ async def import_collection_csv(
     if failed:
         return BulkCollectionAddResponse(added=0, updated=0, failed=failed, errors=errors)
 
-    for item in validated_items:
+    for item in validated_items.values():
         try:
             status = _add_collection_item(db, current_user, item, commit=False)
             if status == "added":
