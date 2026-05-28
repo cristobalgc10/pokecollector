@@ -1346,6 +1346,15 @@ async def import_binder_csv(
                 BinderCard.collection_item_id.is_(None),
             ).first()
             if existing:
+                try:
+                    required_quantity = combine_binder_required_quantity(
+                        _safe_required_quantity(existing.required_quantity),
+                        required_quantity,
+                    )
+                except ValueError as exc:
+                    failed += 1
+                    errors.append(f"row {row_number}: {str(exc)}")
+                    continue
                 planned_row = {"action": "update", "entry": existing, "required_quantity": required_quantity}
             else:
                 planned_row = {"action": "add_card", "card": card, "required_quantity": required_quantity}
