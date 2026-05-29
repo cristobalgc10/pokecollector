@@ -25,12 +25,15 @@ def fallback_exchange_rate(from_currency: str, to_currency: str) -> float:
     return FALLBACK_RATES[(from_currency, to_currency)]
 
 
-def parse_frankfurter_rate(payload: dict, to_currency: str) -> float:
+def _parse_positive_rate(raw_rate) -> float:
     try:
-        raw_rate = payload.get("rates", {}).get(to_currency)
         rate = Decimal(str(raw_rate))
     except (InvalidOperation, TypeError):
         raise ExchangeRateError("missing exchange rate") from None
     if not rate.is_finite() or rate <= 0:
         raise ExchangeRateError("invalid exchange rate")
     return float(rate)
+
+
+def parse_frankfurter_v2_rate(payload: dict) -> float:
+    return _parse_positive_rate(payload.get("rate"))

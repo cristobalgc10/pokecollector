@@ -2,7 +2,7 @@ import httpx
 import os
 import logging
 
-from services.exchange_rates import parse_frankfurter_rate
+from services.exchange_rates import parse_frankfurter_v2_rate
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +91,10 @@ def _format_user_eur(amount: float, db=None, user_id=None) -> str:
 
     if currency == "USD":
         try:
-            with httpx.Client(timeout=5.0, follow_redirects=True) as client:
-                response = client.get(
-                    "https://api.frankfurter.dev/v1/latest",
-                    params={"from": "EUR", "to": "USD"},
-                )
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get("https://api.frankfurter.dev/v2/rate/EUR/USD")
                 response.raise_for_status()
-                rate = parse_frankfurter_rate(response.json(), "USD")
+                rate = parse_frankfurter_v2_rate(response.json())
         except Exception:
             rate = 1.1
         return f"${(amount or 0) * rate:.2f}"

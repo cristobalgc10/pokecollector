@@ -4,7 +4,7 @@ from services.exchange_rates import (
     ExchangeRateError,
     fallback_exchange_rate,
     normalize_currency_pair,
-    parse_frankfurter_rate,
+    parse_frankfurter_v2_rate,
 )
 
 
@@ -21,20 +21,20 @@ class ExchangeRateTests(unittest.TestCase):
         self.assertEqual(fallback_exchange_rate("EUR", "USD"), 1.1)
         self.assertEqual(fallback_exchange_rate("USD", "EUR"), 0.91)
 
-    def test_parses_frankfurter_rate(self):
-        self.assertEqual(parse_frankfurter_rate({"rates": {"EUR": 0.92}}, "EUR"), 0.92)
+    def test_parses_frankfurter_v2_rate(self):
+        self.assertEqual(parse_frankfurter_v2_rate({"rate": 0.92}), 0.92)
 
-    def test_rejects_missing_or_invalid_frankfurter_rate(self):
+    def test_rejects_missing_or_invalid_frankfurter_v2_rate(self):
         for payload in (
-            {"rates": {}},
-            {"rates": {"EUR": 0}},
-            {"rates": {"EUR": "nope"}},
-            {"rates": {"EUR": "NaN"}},
-            {"rates": {"EUR": "Infinity"}},
+            {},
+            {"rate": 0},
+            {"rate": "nope"},
+            {"rate": "NaN"},
+            {"rate": "Infinity"},
         ):
             with self.subTest(payload=payload):
                 with self.assertRaises(ExchangeRateError):
-                    parse_frankfurter_rate(payload, "EUR")
+                    parse_frankfurter_v2_rate(payload)
 
 
 if __name__ == "__main__":

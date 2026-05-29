@@ -13,7 +13,7 @@ from services.exchange_rates import (
     ExchangeRateError,
     fallback_exchange_rate,
     normalize_currency_pair,
-    parse_frankfurter_rate,
+    parse_frankfurter_v2_rate,
 )
 
 router = APIRouter()
@@ -192,13 +192,11 @@ def get_exchange_rate(
 
     try:
         response = httpx.get(
-            "https://api.frankfurter.dev/v1/latest",
-            params={"from": source, "to": target},
+            f"https://api.frankfurter.dev/v2/rate/{source}/{target}",
             timeout=8,
-            follow_redirects=True,
         )
         response.raise_for_status()
-        rate = parse_frankfurter_rate(response.json(), target)
+        rate = parse_frankfurter_v2_rate(response.json())
         return {"from": source, "to": target, "rate": rate, "fallback": False}
     except Exception as exc:
         logger.warning("Failed to fetch exchange rate %s to %s: %s", source, target, exc)
