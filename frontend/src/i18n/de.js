@@ -751,6 +751,17 @@ const de = {
     goBack: 'Zurück',
     addVersion: 'Version hinzufügen',
     ownedVersions: 'Besessene Versionen',
+    sortBy: 'Sortieren nach',
+    sort: {
+      number: 'Sammlernummer',
+      price_desc: 'Preis: absteigend',
+      price_asc: 'Preis: aufsteigend',
+      name_asc: 'Name: A-Z',
+      name_desc: 'Name: Z-A',
+    },
+    rarityFilter: 'Seltenheit',
+    allRarities: 'Alle Seltenheiten',
+    showingCards: '{count} von {total} Karten',
   },
 
   // Card modal

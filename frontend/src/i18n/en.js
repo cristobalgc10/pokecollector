@@ -751,6 +751,17 @@ const en = {
     goBack: 'Go Back',
     addVersion: 'Add version',
     ownedVersions: 'Owned versions',
+    sortBy: 'Sort by',
+    sort: {
+      number: 'Collector number',
+      price_desc: 'Price: high to low',
+      price_asc: 'Price: low to high',
+      name_asc: 'Name: A-Z',
+      name_desc: 'Name: Z-A',
+    },
+    rarityFilter: 'Rarity',
+    allRarities: 'All rarities',
+    showingCards: 'Showing {count} of {total} cards',
   },
 
   // Card modal

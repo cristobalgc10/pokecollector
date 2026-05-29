@@ -742,6 +742,17 @@ const sv = {
     goBack: 'Gå tillbaka',
     addVersion: 'Lägg till version',
     ownedVersions: 'Ägda versioner',
+    sortBy: 'Sortera efter',
+    sort: {
+      number: 'Samlarnummer',
+      price_desc: 'Pris: högst till lägst',
+      price_asc: 'Pris: lägst till högst',
+      name_asc: 'Namn: A-Z',
+      name_desc: 'Namn: Z-A',
+    },
+    rarityFilter: 'Sällsynthet',
+    allRarities: 'Alla sällsyntheter',
+    showingCards: 'Visar {count} av {total} kort',
   },
 
   // Card modal
