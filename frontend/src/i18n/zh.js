@@ -751,6 +751,17 @@ const zh = {
     goBack: '返回',
     addVersion: '添加版本',
     ownedVersions: '已拥有版本',
+    sortBy: '排序方式',
+    sort: {
+      number: '收藏编号',
+      price_desc: '价格：从高到低',
+      price_asc: '价格：从低到高',
+      name_asc: '名称：A-Z',
+      name_desc: '名称：Z-A',
+    },
+    rarityFilter: '稀有度',
+    allRarities: '全部稀有度',
+    showingCards: '显示 {count} / {total} 张卡牌',
   },
 
   // Card modal
