@@ -88,7 +88,7 @@ Be kind. Be clear. Assume good intent. Keep feedback constructive.
 
 ### 🎨 UX & Localization
 - Compact portal navigation with 6 primary home items and grouped tab navigation
-- German, English, Chinese, and Swedish UI
+- German, English, Chinese, Swedish, French and Dutch UI
 - 9 Pokemon-type color themes: Default, Fire, Water, Grass, Electric, Psychic, Dragon, Dark, Fairy
 
 ### ⚙️ Utilities
@@ -294,7 +294,7 @@ All settings are persisted in the database and edited in the Settings UI.
 
 | Setting | Default | Notes |
 |---------|---------|-------|
-| Language | `de` | `de`, `en`, `zh`, `sv` |
+| Language | `de` | `de`, `en`, `zh`, `sv`, `nl` |
 | Currency | `EUR` | Per-user |
 | Primary Price | `trend` | Per-user. Options: `trend`, `avg`, `avg1`, `avg7`, `avg30`, `low` |
 | Multi-User Mode | `false` | Admin-only toggle |
