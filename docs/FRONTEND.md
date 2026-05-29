@@ -79,8 +79,8 @@ Provides:
 
 Notes:
 
-- Translation bundles are loaded from `i18n/de.js`, `i18n/en.js`, and `i18n/zh.js`
-- UI languages are now `DE`, `EN`, and `ZH`
+- Translation bundles are loaded from `i18n/de.js`, `i18n/en.js`, `i18n/zh.js`, and `i18n/sv.js`
+- UI languages are now `DE`, `EN`, `ZH`, and `SV`
 - USD display uses Frankfurter exchange rates client-side
 
 ### `useTheme`
