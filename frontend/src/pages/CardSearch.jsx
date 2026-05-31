@@ -217,10 +217,11 @@ export default function CardSearch() {
   const hasActiveFilters = !!(filters.type || filters.rarity || filters.set_id || filters.series || filters.artist || filters.hp_min || filters.hp_max || filters.sort_by)
   const activeFilterCount = [filters.type, filters.rarity, filters.set_id, filters.series, filters.artist, filters.hp_min, filters.hp_max, filters.sort_by].filter(Boolean).length
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0
+  const hasOpenOverlay = Boolean(selectedCard || showFilters || showCustomModal || showScanner)
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.defaultPrevented) return
+      if (event.defaultPrevented || hasOpenOverlay || event.altKey || event.ctrlKey || event.metaKey) return
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
 
       const target = event.target
@@ -241,7 +242,7 @@ export default function CardSearch() {
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [page, totalPages])
+  }, [hasOpenOverlay, page, totalPages])
 
   const handleCustomCreated = () => {
     queryClient.invalidateQueries({ queryKey: ['custom-cards'] })
