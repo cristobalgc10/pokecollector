@@ -15,6 +15,7 @@ class SetBase(BaseModel):
     images_logo: Optional[str] = None
     abbreviation: Optional[str] = None
     is_new: bool = False
+    is_digital: bool = False
     lang: str = "en"                    # TCGdex language code, never "both"
     owned_count: int = 0
 
@@ -53,6 +54,7 @@ class CardBase(BaseModel):
     data_source_lang: Optional[str] = None
     custom_image_url: Optional[str] = None
     is_custom: bool = False
+    is_digital: bool = False
     price_market: Optional[float] = None
     price_low: Optional[float] = None
     price_mid: Optional[float] = None

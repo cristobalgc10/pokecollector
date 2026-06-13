@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
     "price_primary": "trend",
     "multi_user_mode": "false",
     "tcgdex_sync_languages": "en,de",
+    "tcgdex_digital_sets_enabled": "false",
     "cross_language_price_fallback": "true",
     "cross_language_image_fallback": "true",
     "debug_mode": "false",
@@ -71,6 +72,8 @@ def _run_migrations(conn):
         "ALTER TABLE collection DROP CONSTRAINT IF EXISTS uq_collection_card_variant",
         # Add is_custom column to cards table
         "ALTER TABLE cards ADD COLUMN IF NOT EXISTS is_custom BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE sets ADD COLUMN IF NOT EXISTS is_digital BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE cards ADD COLUMN IF NOT EXISTS is_digital BOOLEAN DEFAULT FALSE",
         # Create custom_card_matches table if it doesn't exist (handled by create_all, belt+suspenders)
         """CREATE TABLE IF NOT EXISTS custom_card_matches (
             id SERIAL PRIMARY KEY,
@@ -294,6 +297,23 @@ def _run_migrations(conn):
         "ALTER TABLE product_ledger_entries ADD COLUMN IF NOT EXISTS card_name VARCHAR",
         "ALTER TABLE product_ledger_entries ADD COLUMN IF NOT EXISTS set_id VARCHAR",
         "ALTER TABLE product_ledger_entries ADD COLUMN IF NOT EXISTS card_number VARCHAR",
+        """UPDATE sets
+           SET is_digital = TRUE
+           WHERE COALESCE(is_digital, FALSE) = FALSE
+             AND (
+               lower(COALESCE(series, '')) LIKE '%pocket%'
+               OR COALESCE(images_logo, '') LIKE '%/tcgp/%'
+               OR COALESCE(images_symbol, '') LIKE '%/tcgp/%'
+             )""",
+        """UPDATE cards
+           SET is_digital = TRUE
+           WHERE COALESCE(is_digital, FALSE) = FALSE
+             AND EXISTS (
+               SELECT 1 FROM sets
+               WHERE sets.is_digital = TRUE
+                 AND sets.tcg_set_id = cards.set_id
+                 AND sets.lang = cards.lang
+             )""",
     ]
     for stmt in migrations:
         try:
@@ -479,6 +499,22 @@ def init_db():
         db.commit()
     except Exception:
         db.rollback()
+
+    # Keep upgraded installs aligned with the default-off digital set setting.
+    try:
+        from services.digital_sets import purge_disabled_digital_catalogue
+        result = purge_disabled_digital_catalogue(db)
+        db.commit()
+        if result["sets_deleted"] or result["cards_deleted"]:
+            logger.info(
+                "Digital set tracking disabled; purged %s digital sets and %s digital cards during startup",
+                result["sets_deleted"],
+                result["cards_deleted"],
+            )
+    except Exception as e:
+        db.rollback()
+        logger.warning("Digital catalogue startup cleanup: %s", e)
+
     # v42: Migrate per-user settings from global to admin user
     try:
         from models import UserSetting

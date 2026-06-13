@@ -10,6 +10,7 @@ from services import pokemon_api
 from services.card_fallbacks import apply_cross_language_fallbacks, build_missing_language_card
 from services.card_numbers import card_number_matches
 from services.card_values import effective_market_price, normalize_price_field
+from services.digital_sets import digital_sets_enabled
 from services.tcgdex_languages import SUPPORTED_TCGDEX_LANGUAGES, has_lang_suffix, is_supported_tcgdex_language, normalize_tcgdex_language
 from services.collection_csv import collection_import_key, is_valid_collection_purchase_price, merge_collection_import_item, normalize_collection_variant
 import datetime
@@ -31,7 +32,7 @@ ALLOWED_LANGS = set(SUPPORTED_TCGDEX_LANGUAGES)
 def _normalize_collection_variant(variant: Optional[str]) -> str:
     return normalize_collection_variant(variant)
 
-_SET_CODE_API_CACHE: Optional[dict[str, List[dict]]] = None
+_SET_CODE_API_CACHE: Optional[dict[str, dict[str, List[dict]]]] = None
 
 def _get_item_price(item, price_field="price_trend"):
     """Return the selected market price for a collection item, respecting holo variant."""
@@ -60,6 +61,8 @@ def _ensure_set_exists_for_card(db: Session, parsed: dict, lang: str, card_data:
     set_data = card_data.get("set") if card_data else None
     if set_data:
         set_parsed = pokemon_api.parse_set_for_db(set_data)
+        if set_parsed.get("is_digital") and not digital_sets_enabled(db):
+            raise HTTPException(status_code=404, detail=f"Card {parsed.get('id')} is not available.")
         set_parsed["lang"] = set_data.get("_lang", lang)
         if not has_lang_suffix(set_parsed["id"]):
             set_parsed["id"] = f"{set_id}_{lang}"
@@ -84,6 +87,8 @@ def ensure_card_exists(db: Session, card_id: str, lang: str = "en") -> Card:
     tcg_card_id, detected_lang = pokemon_api.strip_lang_suffix(card_id)
     lang = _normalize_request_lang(detected_lang if has_lang_suffix(card_id) else lang)
     card = db.query(Card).filter(Card.id == card_id).first()
+    if card and card.is_digital and not digital_sets_enabled(db):
+        raise HTTPException(status_code=404, detail=f"Card {card_id} is not available.")
     if not card:
         card_data = pokemon_api.get_card(tcg_card_id, lang=lang)
         if card_data:
@@ -97,6 +102,15 @@ def ensure_card_exists(db: Session, card_id: str, lang: str = "en") -> Card:
                     detail=f"Card {card_id} is not available locally, from TCGdex, or from a sibling-language fallback yet. Please try again after the source data is available or run Sync later."
                 )
         _ensure_set_exists_for_card(db, parsed, lang, card_data)
+        if parsed.get("set_id"):
+            set_row = db.query(Set.is_digital).filter(
+                Set.tcg_set_id == parsed["set_id"],
+                Set.lang == lang,
+            ).first()
+            if set_row and set_row[0]:
+                parsed["is_digital"] = True
+        if parsed.get("is_digital") and not digital_sets_enabled(db):
+            raise HTTPException(status_code=404, detail=f"Card {card_id} is not available.")
         card = Card(**parsed)
         db.add(card)
         try:
@@ -159,25 +173,28 @@ def _add_collection_item(db: Session, current_user: User, item: CollectionItemCr
     return "added"
 
 
-def _get_api_sets_by_code() -> dict[str, List[dict]]:
+def _get_api_sets_by_code(include_digital: bool = False) -> dict[str, List[dict]]:
     global _SET_CODE_API_CACHE
-    if _SET_CODE_API_CACHE is not None:
-        return _SET_CODE_API_CACHE
+    cache_key = "include_digital" if include_digital else "physical_only"
+    if _SET_CODE_API_CACHE is not None and cache_key in _SET_CODE_API_CACHE:
+        return _SET_CODE_API_CACHE[cache_key]
 
     index: dict[str, List[dict]] = {}
-    for api_set in pokemon_api.get_all_sets():
+    for api_set in pokemon_api.get_all_sets(include_digital=include_digital):
         abbr_obj = api_set.get("abbreviation") or {}
         official = abbr_obj.get("official") if isinstance(abbr_obj, dict) else None
         api_id = api_set.get("id")
         for code in {str(v).upper() for v in (official, api_id) if v}:
             index.setdefault(code, []).append(api_set)
-    _SET_CODE_API_CACHE = index
+    if _SET_CODE_API_CACHE is None:
+        _SET_CODE_API_CACHE = {}
+    _SET_CODE_API_CACHE[cache_key] = index
     return index
 
 
-def _cache_set_by_code(db: Session, set_code_upper: str) -> None:
+def _cache_set_by_code(db: Session, set_code_upper: str, include_digital: bool) -> None:
     try:
-        for api_set in _get_api_sets_by_code().get(set_code_upper, []):
+        for api_set in _get_api_sets_by_code(include_digital=include_digital).get(set_code_upper, []):
             parsed_set = pokemon_api.parse_set_for_db(api_set)
             parsed_set["lang"] = api_set.get("_lang", parsed_set.get("lang") or "en")
             existing_set = db.query(Set).filter(Set.id == parsed_set["id"]).first()
@@ -193,29 +210,37 @@ def _cache_set_by_code(db: Session, set_code_upper: str) -> None:
         db.rollback()
 
 
-def _matching_sets(db: Session, set_code: str) -> List[Set]:
+def _matching_sets(db: Session, set_code: str, include_digital: bool | None = None) -> List[Set]:
+    if include_digital is None:
+        include_digital = digital_sets_enabled(db)
     set_code_upper = set_code.strip().upper()
     set_objs = db.query(Set).filter(
         (func.upper(Set.abbreviation) == set_code_upper) |
         (func.upper(Set.id) == set_code_upper) |
         (func.upper(Set.tcg_set_id) == set_code_upper)
     ).all()
+    if not include_digital:
+        set_objs = [set_obj for set_obj in set_objs if not set_obj.is_digital]
     if not set_objs:
-        _cache_set_by_code(db, set_code_upper)
+        _cache_set_by_code(db, set_code_upper, include_digital)
         set_objs = db.query(Set).filter(
             (func.upper(Set.abbreviation) == set_code_upper) |
             (func.upper(Set.id) == set_code_upper) |
             (func.upper(Set.tcg_set_id) == set_code_upper)
         ).all()
+        if not include_digital:
+            set_objs = [set_obj for set_obj in set_objs if not set_obj.is_digital]
     return set_objs
 
 
 def _find_card_by_code(db: Session, set_code: str, card_number: str, lang: str) -> Card:
-    set_objs = _matching_sets(db, set_code)
+    include_digital = digital_sets_enabled(db)
+    set_objs = _matching_sets(db, set_code, include_digital=include_digital)
     if not set_objs:
         raise ValueError(f"set_code '{set_code}' was not found")
 
     tcg_set_ids = list({s.tcg_set_id or s.id for s in set_objs})
+    digital_tcg_set_ids = {s.tcg_set_id or s.id for s in set_objs if s.is_digital}
 
     def query_card() -> Optional[Card]:
         candidates = db.query(Card).filter(
@@ -234,6 +259,10 @@ def _find_card_by_code(db: Session, set_code: str, card_number: str, lang: str) 
             set_data = pokemon_api.get_set_cards(tcg_set_id, lang=lang)
             for card_data in set_data.get("cards", []):
                 parsed = pokemon_api.parse_card_for_db(card_data, default_set_id=tcg_set_id, lang=lang)
+                if tcg_set_id in digital_tcg_set_ids:
+                    parsed["is_digital"] = True
+                if parsed.get("is_digital") and not include_digital:
+                    continue
                 parsed = apply_cross_language_fallbacks(db, parsed)
                 existing = db.query(Card).filter(Card.id == parsed["id"]).first()
                 if existing:

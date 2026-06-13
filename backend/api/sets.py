@@ -16,6 +16,7 @@ from services.card_fallbacks import (
 )
 from services.card_upsert import upsert_card
 from services.card_visibility import get_configured_sync_languages, visible_set_filter
+from services.digital_sets import digital_sets_enabled
 from services.tcgdex_languages import DEFAULT_TCGDEX_SYNC_LANGUAGES, has_lang_suffix, is_supported_tcgdex_language, normalize_tcgdex_language
 
 router = APIRouter()
@@ -57,7 +58,8 @@ def _refresh_sets(db: Session, display_lang: str):
     """
     normalized_display_lang = normalize_tcgdex_language(display_lang)
     languages = [normalized_display_lang] if is_supported_tcgdex_language(normalized_display_lang) else list(DEFAULT_TCGDEX_SYNC_LANGUAGES)
-    sets_data = pokemon_api.get_all_sets(languages=languages)
+    include_digital = digital_sets_enabled(db)
+    sets_data = pokemon_api.get_all_sets(languages=languages, include_digital=include_digital)
 
     for set_data in sets_data:
         parsed = pokemon_api.parse_set_for_db(set_data)

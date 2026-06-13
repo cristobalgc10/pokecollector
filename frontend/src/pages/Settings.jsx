@@ -530,6 +530,9 @@ export default function Settings() {
   const handleCrossLanguageFallbackToggle = async (key, enabled) => {
     try {
       await updateSettings({ [key]: enabled ? 'true' : 'false' })
+      if (key === 'tcgdex_digital_sets_enabled') {
+        queryClient.invalidateQueries()
+      }
       toast.success(t('settings.saved'))
     } catch {
       toast.error(t('settings.saveFailed'))
@@ -571,6 +574,7 @@ export default function Settings() {
   const currentPriceType = settings.price_primary || 'trend'
   const exportParams = { price_field: pricePrimaryField, currency: currentCurrency, exchange_rate: exchangeRate }
   const currentTcgdexSyncLanguages = normalizeTcgdexLanguageCsv(settings.tcgdex_sync_languages || 'en,de')
+  const digitalSetsEnabled = settings.tcgdex_digital_sets_enabled === 'true'
   const crossLanguagePriceFallback = settings.cross_language_price_fallback !== 'false'
   const crossLanguageImageFallback = settings.cross_language_image_fallback !== 'false'
 
@@ -903,6 +907,12 @@ export default function Settings() {
               )}
               {user?.role === 'admin' && (
                 <>
+                  <SettingsRow label={t('settings.digitalSets')} description={t('settings.digitalSetsDesc')}>
+                    <Toggle
+                      value={digitalSetsEnabled}
+                      onChange={(val) => handleCrossLanguageFallbackToggle('tcgdex_digital_sets_enabled', val)}
+                    />
+                  </SettingsRow>
                   <SettingsRow label={t('settings.crossLanguagePriceFallback')} description={t('settings.crossLanguagePriceFallbackDesc')}>
                     <Toggle
                       value={crossLanguagePriceFallback}

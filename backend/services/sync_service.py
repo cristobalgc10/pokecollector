@@ -9,6 +9,7 @@ from services import pokemon_api, telegram
 from services.card_fallbacks import apply_cross_language_fallbacks, build_missing_language_cards_for_set
 from services.card_upsert import upsert_card
 from services.card_visibility import card_pair_filter, get_configured_sync_languages, get_pinned_set_language_pairs, sync_set_filter
+from services.digital_sets import digital_sets_enabled, purge_digital_catalogue
 from services.card_values import effective_market_price, normalize_price_field
 from services.price_utils import PRICE_FIELDS, has_valid_price
 from services.tcgdex_languages import with_lang_suffix
@@ -496,9 +497,19 @@ def perform_full_sync(db: Session) -> dict:
     try:
         # 1. Sync all sets first
         sync_languages = _get_tcgdex_sync_languages(db)
+        include_digital = digital_sets_enabled(db)
+        if not include_digital:
+            purge_result = purge_digital_catalogue(db)
+            if purge_result["sets_deleted"] or purge_result["cards_deleted"]:
+                db.commit()
+                logger.info(
+                    "Purged %s digital sets and %s digital cards before full sync",
+                    purge_result["sets_deleted"],
+                    purge_result["cards_deleted"],
+                )
         pinned_set_pairs = get_pinned_set_language_pairs(db)
         logger.info("Syncing sets for languages: %s", ", ".join(sync_languages))
-        sets_data = pokemon_api.get_all_sets(languages=sync_languages)
+        sets_data = pokemon_api.get_all_sets(languages=sync_languages, include_digital=include_digital)
         known_set_ids = {s.id for s in db.query(Set.id).all()}
 
         for set_data in sets_data:

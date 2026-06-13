@@ -36,18 +36,21 @@ class CardVisibilityTests(unittest.TestCase):
             self.user,
             self.other_user,
             Setting(key="tcgdex_sync_languages", value="en,de"),
+            Setting(key="tcgdex_digital_sets_enabled", value="false"),
             Set(id="sv1_en", tcg_set_id="sv1", name="SV1 EN", lang="en"),
             Set(id="sv1_de", tcg_set_id="sv1", name="SV1 DE", lang="de"),
             Set(id="sv1_fr", tcg_set_id="sv1", name="SV1 FR", lang="fr"),
             Set(id="sv2_fr", tcg_set_id="sv2", name="SV2 FR", lang="fr"),
             Set(id="sv3_ja", tcg_set_id="sv3", name="SV3 JA", lang="ja"),
             Set(id="sv4_nl", tcg_set_id="sv4", name="SV4 NL", lang="nl"),
+            Set(id="A1_en", tcg_set_id="A1", name="Genetic Apex", lang="en", is_digital=True),
             Card(id="sv1-1_en", tcg_card_id="sv1-1", name="Active EN", set_id="sv1", number="1", lang="en", is_custom=False),
             Card(id="sv1-1_fr", tcg_card_id="sv1-1", name="Hidden FR", set_id="sv1", number="1", lang="fr", is_custom=False),
             Card(id="sv2-1_fr", tcg_card_id="sv2-1", name="Pinned Collection FR", set_id="sv2", number="1", lang="fr", is_custom=False),
             Card(id="sv2-2_fr", tcg_card_id="sv2-2", name="Pinned Set Other FR", set_id="sv2", number="2", lang="fr", is_custom=False),
             Card(id="sv3-1_ja", tcg_card_id="sv3-1", name="Pinned Wishlist JA", set_id="sv3", number="1", lang="ja", is_custom=False),
             Card(id="sv4-1_nl", tcg_card_id="sv4-1", name="Pinned Binder NL", set_id="sv4", number="1", lang="nl", is_custom=False),
+            Card(id="A1-1_en", tcg_card_id="A1-1", name="Digital EN", set_id="A1", number="1", lang="en", is_custom=False, is_digital=True),
         ])
         self.db.commit()
         self.db.refresh(self.user)
@@ -95,6 +98,7 @@ class CardVisibilityTests(unittest.TestCase):
         self.assertIn("sv3_ja", visible_ids)
         self.assertIn("sv4_nl", visible_ids)
         self.assertNotIn("sv1_fr", visible_ids)
+        self.assertNotIn("A1_en", visible_ids)
 
         other_visible_ids = {
             row.id
@@ -123,6 +127,26 @@ class CardVisibilityTests(unittest.TestCase):
         self.assertIn("sv3_ja", sync_set_ids)
         self.assertIn("sv4_nl", sync_set_ids)
         self.assertNotIn("sv1_fr", sync_set_ids)
+        self.assertNotIn("A1_en", sync_set_ids)
+
+    def test_digital_sets_are_visible_when_admin_setting_is_enabled(self):
+        setting = self.db.query(Setting).filter(Setting.key == "tcgdex_digital_sets_enabled").first()
+        setting.value = "true"
+        self.db.commit()
+
+        visible_set_ids = {
+            row.id
+            for row in self.db.query(Set).filter(visible_set_filter(self.db, self.user.id, "all")).all()
+        }
+        visible_card_ids = {
+            row.id
+            for row in self.db.query(Card).filter(visible_card_filter(self.db, self.user.id, "all")).all()
+        }
+        sync_set_ids = {row.id for row in self.db.query(Set).filter(sync_set_filter(self.db)).all()}
+
+        self.assertIn("A1_en", visible_set_ids)
+        self.assertIn("A1-1_en", visible_card_ids)
+        self.assertIn("A1_en", sync_set_ids)
 
     def test_full_sync_price_plan_includes_all_cards_in_pinned_set(self):
         plan = _price_sync_plan(self.db, force=True, include_pinned_sets=True)

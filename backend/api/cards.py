@@ -16,6 +16,7 @@ from services.card_fallbacks import (
 )
 from services.card_upsert import upsert_card
 from services.card_visibility import get_configured_sync_languages, visible_card_filter, visible_set_filter
+from services.digital_sets import digital_sets_enabled
 from services.image_url_security import validate_public_https_image_url
 from services.card_numbers import card_number_matches
 from services.tcgdex_languages import english_fallback_languages, has_lang_suffix, is_supported_tcgdex_language, normalize_tcgdex_language
@@ -71,6 +72,7 @@ def _card_to_dict(card: Card) -> dict:
         "data_source_lang": getattr(card, "data_source_lang", None),
         "custom_image_url": getattr(card, "custom_image_url", None),
         "is_custom": card.is_custom or False,
+        "is_digital": card.is_digital or False,
         "lang": card.lang or "en",
         "price_market": card.price_market,
         "price_low": card.price_low,
@@ -154,7 +156,7 @@ def _search_by_code_number(
             if lang != "all" and lang not in set(active_languages):
                 return {"data": [], "total_count": 0, "page": page, "page_size": page_size}
             api_languages = [lang] if lang != "all" else active_languages
-            api_sets = pokemon_api.get_all_sets(languages=api_languages)
+            api_sets = pokemon_api.get_all_sets(languages=api_languages, include_digital=digital_sets_enabled(db))
             for api_set in api_sets:
                 abbr_obj = api_set.get("abbreviation") or {}
                 official = (
@@ -564,11 +566,17 @@ def migrate_custom_card(
         if parsed.get("set_id"):
             set_db_id = f"{parsed['set_id']}_{fetch_lang}"
             set_obj = db.query(Set).filter(Set.id == set_db_id).first()
+            if set_obj and set_obj.is_digital and not digital_sets_enabled(db):
+                raise HTTPException(status_code=404, detail="API card not found on TCGdex")
+            if set_obj and set_obj.is_digital:
+                parsed["is_digital"] = True
             if not set_obj:
                 set_data = api_data.get("set") or {}
                 if set_data:
                     set_data = {**set_data, "_lang": fetch_lang, "_db_key": set_db_id}
                     set_parsed = pokemon_api.parse_set_for_db(set_data)
+                    if set_parsed.get("is_digital") and not digital_sets_enabled(db):
+                        raise HTTPException(status_code=404, detail="API card not found on TCGdex")
                     set_parsed["lang"] = fetch_lang
                     db.add(Set(**set_parsed))
                 else:
@@ -866,16 +874,25 @@ def get_card(
         if parsed.get("set_id"):
             set_db_id = f"{parsed['set_id']}_{card_lang}"
             set_obj = db.query(Set).filter(Set.id == set_db_id).first()
+            if set_obj and set_obj.is_digital and not digital_sets_enabled(db):
+                raise HTTPException(status_code=404, detail="Card not found")
+            if set_obj and set_obj.is_digital:
+                parsed["is_digital"] = True
             if not set_obj:
                 # Create minimal set record
                 set_data = card_data.get("set") if card_data else None
                 if set_data:
                     set_data = {**set_data, "_lang": card_lang, "_db_key": set_db_id}
                     set_parsed = pokemon_api.parse_set_for_db(set_data)
+                    if set_parsed.get("is_digital") and not digital_sets_enabled(db):
+                        raise HTTPException(status_code=404, detail="Card not found")
                     set_parsed["lang"] = card_lang
                     db.add(Set(**set_parsed))
                 else:
                     db.add(Set(id=set_db_id, tcg_set_id=parsed["set_id"], name=parsed["set_id"], total=0, lang=card_lang))
+
+        if parsed.get("is_digital") and not digital_sets_enabled(db):
+            raise HTTPException(status_code=404, detail="Card not found")
 
         card = upsert_card(db, parsed)
         db.commit()
