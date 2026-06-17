@@ -12,6 +12,7 @@ from sqlalchemy import and_, false, or_
 from sqlalchemy.orm import Session
 
 from models import Binder, BinderCard, Card, CollectionItem, Set, Setting, WishlistItem
+from services.digital_sets import digital_sets_enabled
 from services.tcgdex_languages import SUPPORTED_TCGDEX_LANGUAGES, normalize_tcgdex_language, normalize_tcgdex_sync_languages, with_lang_suffix
 
 SetLangPair = tuple[str, str]
@@ -123,12 +124,14 @@ def visible_set_filter(db: Session, user_id: int, requested_lang: str | None = "
     pinned_pairs = get_pinned_set_language_pairs(db, user_id=user_id)
     lang = normalize_tcgdex_language(requested_lang or "all")
 
+    digital_clause = True if digital_sets_enabled(db) else Set.is_digital == False
+
     if lang != "all":
         if lang in active_languages:
-            return Set.lang == lang
-        return set_pair_filter({pair for pair in pinned_pairs if pair[1] == lang})
+            return and_(Set.lang == lang, digital_clause)
+        return and_(set_pair_filter({pair for pair in pinned_pairs if pair[1] == lang}), digital_clause)
 
-    return or_(Set.lang.in_(active_languages), set_pair_filter(pinned_pairs))
+    return and_(or_(Set.lang.in_(active_languages), set_pair_filter(pinned_pairs)), digital_clause)
 
 
 def visible_card_filter(db: Session, user_id: int, requested_lang: str | None = "all"):
@@ -137,16 +140,19 @@ def visible_card_filter(db: Session, user_id: int, requested_lang: str | None = 
     pinned_pairs = get_pinned_set_language_pairs(db, user_id=user_id)
     lang = normalize_tcgdex_language(requested_lang or "all")
 
+    digital_clause = True if digital_sets_enabled(db) else Card.is_digital == False
+
     if lang != "all":
         if lang in active_languages:
-            return Card.lang == lang
-        return card_pair_filter({pair for pair in pinned_pairs if pair[1] == lang})
+            return and_(Card.lang == lang, digital_clause)
+        return and_(card_pair_filter({pair for pair in pinned_pairs if pair[1] == lang}), digital_clause)
 
-    return or_(Card.lang.in_(active_languages), card_pair_filter(pinned_pairs))
+    return and_(or_(Card.lang.in_(active_languages), card_pair_filter(pinned_pairs)), digital_clause)
 
 
 def sync_set_filter(db: Session):
     """Predicate for localized sets that full sync should maintain app-wide."""
     active_languages = set(get_configured_sync_languages(db))
     pinned_pairs = get_pinned_set_language_pairs(db, user_id=None)
-    return or_(Set.lang.in_(active_languages), set_pair_filter(pinned_pairs))
+    digital_clause = True if digital_sets_enabled(db) else Set.is_digital == False
+    return and_(or_(Set.lang.in_(active_languages), set_pair_filter(pinned_pairs)), digital_clause)

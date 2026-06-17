@@ -618,6 +618,8 @@ const en = {
     tcgdexSyncLanguagesDesc: 'Choose which languages full TCGdex set/card sync should fetch. Extra languages increase sync time, API calls, and database size. Price sync is unaffected.',
     tcgdexSyncLanguagesSelected: 'selected',
     tcgdexSyncLanguagesFallbackNote: 'English is always used as the preferred fallback source for missing data when the same TCGdex ID exists.',
+    digitalSets: 'Show digital sets',
+    digitalSetsDesc: 'Show and sync Pokemon TCG Pocket sets. Turning this off hides digital-only sets and cards and excludes them from sync.',
     debugMode: 'Debug Mode',
     debugModeDesc: 'Write a temporary backend debug log that can be downloaded for troubleshooting. Admin only.',
     debugLogDownload: 'Download Log',

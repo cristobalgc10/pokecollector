@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Setting, UserSetting, User
 from services.debug_logging import configure_debug_logging, get_debug_log_path
+from services.digital_sets import DIGITAL_SETS_SETTING_KEY, refresh_digital_catalogue_flags
 from services.exchange_rates import (
     ExchangeRateError,
     fallback_exchange_rate,
@@ -36,6 +37,7 @@ ADMIN_ONLY_KEYS = {
     "full_sync_interval_days", "price_sync_interval_minutes", "multi_user_mode",
     "tcgdex_sync_languages", "debug_mode",
     "cross_language_price_fallback", "cross_language_image_fallback",
+    DIGITAL_SETS_SETTING_KEY,
 }
 
 DEFAULT_SETTINGS = {
@@ -51,6 +53,7 @@ DEFAULT_SETTINGS = {
     "price_primary": "trend",
     "price_display": '["trend", "avg", "avg1", "avg7", "avg30", "low"]',
     "tcgdex_sync_languages": "en,de",
+    DIGITAL_SETS_SETTING_KEY: "true",
     "cross_language_price_fallback": "true",
     "cross_language_image_fallback": "true",
     "debug_mode": "false",
@@ -67,16 +70,24 @@ def _normalize_tcgdex_sync_languages(value) -> str:
 def _coerce_setting_value(key: str, value) -> str:
     if key == "tcgdex_sync_languages":
         return _normalize_tcgdex_sync_languages(value)
-    if key in {"debug_mode", "cross_language_price_fallback", "cross_language_image_fallback"}:
+    if key in {"debug_mode", "cross_language_price_fallback", "cross_language_image_fallback", DIGITAL_SETS_SETTING_KEY}:
         return "true" if str(value).lower() in {"true", "1", "yes", "on"} else "false"
     return str(value)
 
 
-def _apply_setting_side_effect(key: str, value: str) -> None:
+def _apply_setting_side_effect(db: Session, key: str, value: str) -> None:
     if key == "debug_mode":
         enabled = value == "true"
         configure_debug_logging(enabled)
         logger.info("Debug mode setting changed to %s", enabled)
+    elif key == DIGITAL_SETS_SETTING_KEY:
+        result = refresh_digital_catalogue_flags(db)
+        logger.info(
+            "Digital set visibility changed to %s; marked %s digital sets and %s digital cards",
+            value == "true",
+            result["sets_marked"],
+            result["cards_marked"],
+        )
 
 
 def _is_admin(db: Session, user_id: int) -> bool:
@@ -165,9 +176,9 @@ def update_settings(data: dict, db: Session = Depends(get_db), current_user: Use
                 row.value = coerced_value
             else:
                 db.add(UserSetting(user_id=current_user.id, key=key, value=coerced_value))
-    db.commit()
     for key, value in pending_side_effects:
-        _apply_setting_side_effect(key, value)
+        _apply_setting_side_effect(db, key, value)
+    db.commit()
     return _get_user_settings(db, current_user.id)
 
 
@@ -256,7 +267,7 @@ def set_setting(key: str, body: dict, db: Session = Depends(get_db), current_use
             row.value = value
         else:
             db.add(UserSetting(user_id=current_user.id, key=key, value=value))
-    db.commit()
     if key in ADMIN_ONLY_KEYS:
-        _apply_setting_side_effect(*pending_side_effect)
+        _apply_setting_side_effect(db, *pending_side_effect)
+    db.commit()
     return {"key": key, "value": value}

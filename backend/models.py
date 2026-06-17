@@ -21,6 +21,7 @@ class Set(Base):
     images_logo = Column(String)
     abbreviation = Column(String, nullable=True)
     is_new = Column(Boolean, default=False)
+    is_digital = Column(Boolean, default=False)
     lang = Column(String, default="en")      # TCGdex language code, NEVER "both"
     updated_at = Column(DateTime, default=func.now())
 
@@ -69,6 +70,7 @@ class Card(Base):
     data_source_lang = Column(String, nullable=True)   # Set when metadata is copied from another TCGdex language
     custom_image_url = Column(String, nullable=True)   # Manual temporary fallback while TCGdex has no image
     is_custom = Column(Boolean, default=False)
+    is_digital = Column(Boolean, default=False)
     lang = Column(String, default="en")      # TCGdex language code
     # Cardmarket EUR prices
     price_market = Column(Float)

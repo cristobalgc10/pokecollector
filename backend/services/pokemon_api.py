@@ -8,6 +8,7 @@ from services.tcgdex_languages import (
     normalize_tcgdex_sync_languages,
     strip_lang_suffix as _strip_lang_suffix,
 )
+from services.digital_sets import is_digital_set_data
 
 TCGDEX_BASE = "https://api.tcgdex.net/v2"
 
@@ -218,7 +219,7 @@ def get_card(card_id: str, lang: str = "en") -> Optional[Dict]:
         return response.json()
 
 
-def get_all_sets(languages: Optional[List[str]] = None) -> List[Dict]:
+def get_all_sets(languages: Optional[List[str]] = None, *, include_digital: bool = False) -> List[Dict]:
     """Get all sets from TCGdex API for the requested languages.
 
     Each language version of a set is returned as a SEPARATE entry.
@@ -246,7 +247,7 @@ def get_all_sets(languages: Optional[List[str]] = None) -> List[Dict]:
                     continue
 
                 # Build set→series mapping for this language
-                set_to_series: Dict[str, str] = {}
+                set_to_series: Dict[str, Dict[str, str]] = {}
                 try:
                     series_response = client.get(f"{url}/series", timeout=30.0)
                     all_series = series_response.json() if series_response.status_code == 200 else []
@@ -256,8 +257,9 @@ def get_all_sets(languages: Optional[List[str]] = None) -> List[Dict]:
                             if sr.status_code == 200:
                                 serie_data = sr.json()
                                 serie_name = serie_data.get("name") or serie.get("name") or serie["id"]
+                                serie_id = serie_data.get("id") or serie.get("id")
                                 for s in serie_data.get("sets", []):
-                                    set_to_series[s["id"]] = serie_name
+                                    set_to_series[s["id"]] = {"id": serie_id, "name": serie_name}
                         except Exception:
                             pass
                 except Exception:
@@ -267,6 +269,9 @@ def get_all_sets(languages: Optional[List[str]] = None) -> List[Dict]:
                     sid = s.get("id")
                     if not sid:
                         continue
+                    series_entry = set_to_series.get(sid) or {}
+                    if not include_digital and series_entry.get("id") == "tcgp":
+                        continue
                     # Fetch full detail to populate abbreviation and other fields
                     try:
                         detail = client.get(f"{url}/sets/{sid}", timeout=30.0)
@@ -275,7 +280,10 @@ def get_all_sets(languages: Optional[List[str]] = None) -> List[Dict]:
                         entry = dict(s)
                     entry["_lang"] = lang
                     entry["_db_key"] = f"{sid}_{lang}"
-                    entry["_series_name"] = set_to_series.get(sid)
+                    entry["_series_id"] = series_entry.get("id")
+                    entry["_series_name"] = series_entry.get("name")
+                    if not include_digital and is_digital_set_data(entry):
+                        continue
                     all_sets.append(entry)
 
             except Exception:
@@ -383,6 +391,7 @@ def parse_card_for_db(card_data: Dict, default_set_id: Optional[str] = None, lan
         "images_large": f"{image}/high.webp" if image else None,
         "image_source_lang": None,
         "data_source_lang": None,
+        "is_digital": is_digital_set_data(set_data),
         "lang": card_lang,
         "stage": card_data.get("stage"),
         "evolve_from": card_data.get("evolveFrom"),
@@ -445,4 +454,5 @@ def parse_set_for_db(set_data: Dict) -> Dict:
         "images_symbol": f"{set_data.get('symbol')}.webp" if set_data.get("symbol") else None,
         "images_logo": f"{set_data.get('logo')}.webp" if set_data.get("logo") else None,
         "abbreviation": abbreviation,
+        "is_digital": is_digital_set_data(set_data),
     }
