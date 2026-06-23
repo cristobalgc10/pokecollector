@@ -56,6 +56,62 @@ const VARIANT_COLORS = {
   'Normal': 'badge-gray',
 }
 
+const CARD_CATEGORY_OPTIONS = ['Pokémon', 'Trainer', 'Energy']
+const CARD_SUBTYPE_OPTIONS = ['Item', 'Supporter', 'Stadium', 'Pokémon Tool', 'EX', 'ex', 'GX', 'Stage 1', 'Stage 2', 'Basic']
+
+const normalizeCardFilterValue = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase()
+
+const normalizeCardFilterLabelKey = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+
+const CARD_FILTER_DISPLAY_LABELS = new Map(
+  [...CARD_CATEGORY_OPTIONS, ...CARD_SUBTYPE_OPTIONS].map(label => [normalizeCardFilterLabelKey(label), label])
+)
+
+const getPreferredCardFilterLabel = (value) => (
+  CARD_FILTER_DISPLAY_LABELS.get(normalizeCardFilterLabelKey(value)) || String(value || '').trim()
+)
+
+const getCardCategoryLabel = (card) => {
+  const supertype = String(card?.supertype || '').trim()
+  if (normalizeCardFilterValue(supertype) === 'pokemon') return 'Pokémon'
+  if (supertype) return getPreferredCardFilterLabel(supertype)
+  return ''
+}
+
+const getCardSubtypeLabels = (card) => {
+  const labels = new Set()
+  ;(card?.subtypes || []).forEach(subtype => {
+    if (subtype) labels.add(getPreferredCardFilterLabel(subtype))
+  })
+  ;[card?.trainer_type, card?.energy_type, card?.stage].forEach(subtype => {
+    if (subtype) labels.add(getPreferredCardFilterLabel(subtype))
+  })
+  return [...labels].filter(Boolean)
+}
+
+const sortCardFilterLabels = (preferredOrder, labels) => {
+  const preferredIndex = new Map(preferredOrder.map((label, index) => [normalizeCardFilterLabelKey(label), index]))
+  return [...labels].sort((a, b) => {
+    const indexA = preferredIndex.get(normalizeCardFilterLabelKey(a))
+    const indexB = preferredIndex.get(normalizeCardFilterLabelKey(b))
+    if (indexA !== undefined || indexB !== undefined) {
+      return (indexA ?? Number.MAX_SAFE_INTEGER) - (indexB ?? Number.MAX_SAFE_INTEGER)
+    }
+    return a.localeCompare(b)
+  })
+}
+
+const toggleFilterValue = (values, value) => (
+  values.includes(value) ? values.filter(item => item !== value) : [...values, value]
+)
+
 
 const CSV_IMPORT_HEADER = 'set_code,number,quantity,condition,variant,lang,purchase_price'
 const CSV_IMPORT_TEMPLATE = `${CSV_IMPORT_HEADER}\nASC,152,1,NM,Normal,en,\n`
@@ -734,6 +790,8 @@ export default function Collection() {
   const [filterVariant, setFilterVariant] = useState('')
   const [filterSet, setFilterSet] = useState('')
   const [filterType, setFilterType] = useState('')
+  const [filterCategories, setFilterCategories] = useState([])
+  const [filterSubtypes, setFilterSubtypes] = useState([])
   const [filterLegality, setFilterLegality] = useState('')
   const [filterLang, setFilterLang] = useState('')
   const [filterMinPrice, setFilterMinPrice] = useState('')
@@ -861,8 +919,21 @@ export default function Collection() {
     items.forEach(i => (i.card?.types || []).forEach(tp => all.add(tp)))
     return [...all].sort()
   }, [items])
+  const cardCategories = useMemo(() => {
+    const all = new Set(CARD_CATEGORY_OPTIONS)
+    items.forEach(i => {
+      const label = getCardCategoryLabel(i.card)
+      if (label) all.add(label)
+    })
+    return sortCardFilterLabels(CARD_CATEGORY_OPTIONS, all)
+  }, [items])
+  const cardSubtypes = useMemo(() => {
+    const all = new Set(CARD_SUBTYPE_OPTIONS)
+    items.forEach(i => getCardSubtypeLabels(i.card).forEach(label => all.add(label)))
+    return sortCardFilterLabels(CARD_SUBTYPE_OPTIONS, all)
+  }, [items])
 
-  const hasActiveFilters = filterRarity || filterCondition || filterVariant || filterSet || filterType || filterLegality || filterLang || filterMinPrice || filterMaxPrice || filterDuplicates || searchText
+  const hasActiveFilters = filterRarity || filterCondition || filterVariant || filterSet || filterType || filterCategories.length > 0 || filterSubtypes.length > 0 || filterLegality || filterLang || filterMinPrice || filterMaxPrice || filterDuplicates || searchText
 
   const filtered = useMemo(() => {
     let result = items.filter(item => {
@@ -875,6 +946,16 @@ export default function Collection() {
         if (item.card?.set_ref?.id !== filterSet) return false
       }
       if (filterType && !(card?.types || []).includes(filterType)) return false
+      if (filterCategories.length > 0) {
+        const category = normalizeCardFilterValue(getCardCategoryLabel(card))
+        const categoryMatches = filterCategories.some(filter => normalizeCardFilterValue(filter) === category)
+        if (!categoryMatches) return false
+      }
+      if (filterSubtypes.length > 0) {
+        const subtypes = getCardSubtypeLabels(card).map(normalizeCardFilterLabelKey)
+        const subtypeMatches = filterSubtypes.some(filter => subtypes.includes(normalizeCardFilterLabelKey(filter)))
+        if (!subtypeMatches) return false
+      }
       if (filterLegality === 'standard' && !item.standard_legal) return false
       if (filterLang && item.lang !== filterLang) return false
       if (filterMinPrice && marketPrice < parseFloat(filterMinPrice)) return false
@@ -920,7 +1001,7 @@ export default function Collection() {
     })
 
     return result
-  }, [items, filterRarity, filterCondition, filterVariant, filterSet, filterType, filterLegality, filterLang, filterMinPrice, filterMaxPrice, filterDuplicates, searchText, sortBy, sortOrder, pricePrimaryField])
+  }, [items, filterRarity, filterCondition, filterVariant, filterSet, filterType, filterCategories, filterSubtypes, filterLegality, filterLang, filterMinPrice, filterMaxPrice, filterDuplicates, searchText, sortBy, sortOrder, pricePrimaryField])
 
   const totalValue = filtered.reduce((sum, item) => sum + (getEffectivePrice(item.card, item.variant) * item.quantity), 0)
   const totalCards = filtered.reduce((sum, item) => sum + item.quantity, 0)
@@ -928,7 +1009,7 @@ export default function Collection() {
 
   const resetFilters = () => {
     setFilterRarity(''); setFilterCondition(''); setFilterVariant('')
-    setFilterSet(''); setFilterType(''); setFilterLegality(''); setFilterLang(''); setFilterMinPrice('')
+    setFilterSet(''); setFilterType(''); setFilterCategories([]); setFilterSubtypes([]); setFilterLegality(''); setFilterLang(''); setFilterMinPrice('')
     setFilterMaxPrice(''); setFilterDuplicates(false); setSearchText('')
   }
 
@@ -1070,11 +1151,43 @@ export default function Collection() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-text-muted mb-1 block">{t('collection.filterType')}</label>
+              <label className="text-xs text-text-muted mb-1 block">{t('collection.filterEnergyType')}</label>
               <select className="select py-1.5 text-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                <option value="">{t('collection.allTypes')}</option>
+                <option value="">{t('collection.allEnergyTypes')}</option>
                 {types.map(tp => <option key={tp} value={tp}>{tp}</option>)}
               </select>
+            </div>
+            <div className="col-span-2 sm:col-span-3 lg:col-span-2">
+              <label className="text-xs text-text-muted mb-1 block">{t('collection.filterCardCategory')}</label>
+              <div className="min-h-[34px] rounded-lg border border-border bg-bg px-2 py-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
+                {cardCategories.map(category => (
+                  <label key={category} className="inline-flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={filterCategories.includes(category)}
+                      onChange={() => setFilterCategories(values => toggleFilterValue(values, category))}
+                      className="w-3.5 h-3.5 accent-brand-red"
+                    />
+                    <span>{category}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-2 sm:col-span-3 lg:col-span-3">
+              <label className="text-xs text-text-muted mb-1 block">{t('collection.filterSubtype')}</label>
+              <div className="min-h-[34px] rounded-lg border border-border bg-bg px-2 py-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
+                {cardSubtypes.map(subtype => (
+                  <label key={subtype} className="inline-flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={filterSubtypes.includes(subtype)}
+                      onChange={() => setFilterSubtypes(values => toggleFilterValue(values, subtype))}
+                      className="w-3.5 h-3.5 accent-brand-red"
+                    />
+                    <span>{subtype}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div>
               <label className="text-xs text-text-muted mb-1 block">{t('collection.filterLegality')}</label>
